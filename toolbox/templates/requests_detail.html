@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block title %}#{{ req.id }} {{ req.title }} · 荣信工具箱{% endblock %}
+{% block header_right %}
+  <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
+  {% if session.user_name %}
+    <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% endif %}
+{% endblock %}
 {% block subnav %}
 <nav class="subnav">
   <a href="{{ url_for('new_requirement') }}">提需求</a>

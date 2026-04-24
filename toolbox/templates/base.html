@@ -12,10 +12,12 @@
     <div class="header-inner">
       <h1><a href="{{ url_for('dashboard') }}">荣信工具箱</a></h1>
       <div class="header-right">
+        {% block header_right %}
         {% if session.user_name %}
           <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
           <a href="{{ url_for('logout') }}" class="btn-logout">退出登录</a>
         {% endif %}
+        {% endblock %}
       </div>
     </div>
     {% block subnav %}{% endblock %}
