@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}荣信工具箱{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <h1><a href="{{ url_for('dashboard') }}">荣信工具箱</a></h1>
+      <div class="header-right">
+        {% if session.user_name %}
+          <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+          <a href="{{ url_for('logout') }}" class="btn-logout">退出登录</a>
+        {% endif %}
+      </div>
+    </div>
+    {% block subnav %}{% endblock %}
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <small>荣信工具箱 · 局域网共享</small>
+  </footer>
+</body>
+</html>

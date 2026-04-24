@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}提需求 · 荣信工具箱{% endblock %}
+{% block subnav %}
+<nav class="subnav">
+  <a href="{{ url_for('new_requirement') }}" class="{% if request.endpoint == 'new_requirement' %}active{% endif %}">提需求</a>
+  <a href="{{ url_for('list_requirements') }}" class="{% if request.endpoint == 'list_requirements' %}active{% endif %}">所有需求</a>
+</nav>
+{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>提交一个新需求</h2>
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+  <div class="submitter-badge">
+    提交人：<b>{{ session.user_name }}</b> · {{ session.user_department }}
+  </div>
+  <form action="{{ url_for('submit') }}" method="post" enctype="multipart/form-data" class="form">
+    <label>
+      <span>标题 <em>*</em></span>
+      <input type="text" name="title" maxlength="120" required
+             value="{{ form.title if form else '' }}" placeholder="用一句话描述你的需求" autofocus />
+    </label>
+    <label>
+      <span>内容 <em>*</em></span>
+      <textarea name="content" rows="6" required
+                placeholder="详细说明需求的背景、期望效果等">{{ form.content if form else '' }}</textarea>
+    </label>
+    <label>
+      <span>上传图片 <small>(可选)</small></span>
+      <input type="file" name="image" accept="image/*" />
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn primary">提交需求</button>
+      <a class="btn link" href="{{ url_for('list_requirements') }}">查看所有需求和目前进度 →</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

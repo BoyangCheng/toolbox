@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <a class="back" href="{{ url_for('list_requirements') }}">← 返回需求列表</a>
+
+  <div class="req-top">
+    <h2 class="req-title">#{{ req.id }} {{ req.title }}</h2>
+    <span class="status status-{{ req.status }}">{{ req.status }}</span>
+  </div>
+
+  <div class="req-meta">
+    <span>提出人: <b>{{ req.author }}</b></span>
+    <span>{{ req.created_at }}</span>
+  </div>
+
+  <p class="req-content detail">{{ req.content }}</p>
+
+  {% if req.image %}
+    <img class="req-image" src="{{ url_for('uploaded_file', filename=req.image) }}" alt="" />
+  {% endif %}
+
+  <div class="detail-actions">
+    <button class="like-btn" data-id="{{ req.id }}">
+      👍 <span class="like-count">{{ req.likes }}</span>
+    </button>
+
+    <form class="status-form" method="post" action="{{ url_for('update_status', rid=req.id) }}">
+      <label>更新进度:</label>
+      <select name="status">
+        {% for s in ['待处理','进行中','已完成','已搁置'] %}
+          <option value="{{ s }}" {% if s == req.status %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">保存</button>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <h3>评论 ({{ comments|length }})</h3>
+
+  {% if request.args.get('err') %}
+    <div class="error">评论人和评论内容都不能为空</div>
+  {% endif %}
+
+  {% if comments %}
+    <ul class="comments">
+      {% for c in comments %}
+        <li class="comment">
+          <div class="comment-head">
+            <b>{{ c.author }}</b>
+            <span class="muted">{{ c.created_at }}</span>
+          </div>
+          <div class="comment-body">{{ c.content }}</div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">还没有人评论,来抢沙发吧。</p>
+  {% endif %}
+
+  <form class="form" method="post" action="{{ url_for('add_comment', rid=req.id) }}">
+    <label>
+      <span>你的名字 <em>*</em></span>
+      <input type="text" name="author" maxlength="40" required
+             value="{{ session.get('name', '') }}" />
+    </label>
+    <label>
+      <span>评论内容 <em>*</em></span>
+      <textarea name="content" rows="3" required placeholder="说点什么..."></textarea>
+    </label>
+    <div class="actions">
+      <button class="btn primary" type="submit">发表评论</button>
+    </div>
+  </form>
+</section>
+
+<script>
+document.querySelectorAll('.like-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/requirements/${id}/like`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        btn.querySelector('.like-count').textContent = data.likes;
+        btn.classList.add('liked');
+      }
+    } finally {
+      setTimeout(() => { btn.disabled = false; }, 300);
+    }
+  });
+});
+</script>
+{% endblock %}

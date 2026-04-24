@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>我觉得系统应该是这样的 !</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="site-header">
+    <h1><a href="{{ url_for('index') }}">我觉得系统应该是这样的 !</a></h1>
+    <nav>
+      <a href="{{ url_for('index') }}">提需求</a>
+      <a href="{{ url_for('list_requirements') }}">查看所有需求</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <small>本地服务 · 局域网共享</small>
+  </footer>
+</body>
+</html>

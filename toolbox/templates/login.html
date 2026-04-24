@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}登录 · 荣信工具箱{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card card">
+    <div class="auth-logo">🧰</div>
+    <h2 class="auth-title">登录荣信工具箱</h2>
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+    <form class="form" method="post" action="{{ url_for('login') }}">
+      <label>
+        <span>手机号</span>
+        <input type="tel" name="phone" maxlength="20" required placeholder="请输入手机号" autofocus />
+      </label>
+      <label>
+        <span>密码</span>
+        <input type="password" name="password" required placeholder="请输入密码" />
+      </label>
+      <div class="actions" style="margin-top:8px">
+        <button type="submit" class="btn primary full-width">登 录</button>
+      </div>
+    </form>
+    <p class="auth-switch">还没有账号？<a href="{{ url_for('register') }}">立即注册</a></p>
+  </div>
+</div>
+{% endblock %}

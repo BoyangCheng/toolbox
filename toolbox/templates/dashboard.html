@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}工具箱首页 · 荣信工具箱{% endblock %}
+{% block content %}
+<div class="dashboard-welcome">
+  <h2>你好，{{ session.user_name }} 👋</h2>
+  <p>选择一个工具开始工作</p>
+</div>
+<div class="tool-grid">
+  <a class="tool-card" href="{{ url_for('flowchart') }}">
+    <div class="tool-icon">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="6" width="16" height="10" rx="2" fill="#4f46e5" opacity="0.15" stroke="#4f46e5" stroke-width="2"/>
+        <rect x="28" y="6" width="16" height="10" rx="2" fill="#4f46e5" opacity="0.15" stroke="#4f46e5" stroke-width="2"/>
+        <rect x="16" y="32" width="16" height="10" rx="5" fill="#4f46e5" opacity="0.15" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="12" y1="16" x2="12" y2="24" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="36" y1="16" x2="36" y2="24" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="12" y1="24" x2="36" y2="24" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="24" y1="24" x2="24" y2="32" stroke="#4f46e5" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="tool-name">流程图编辑器</div>
+    <div class="tool-desc">创建和编辑业务流程图，支持分组、连线、导出 SVG</div>
+  </a>
+  <a class="tool-card" href="{{ url_for('list_requirements') }}">
+    <div class="tool-icon">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="20" r="10" fill="#4f46e5" opacity="0.15" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="24" y1="30" x2="24" y2="36" stroke="#4f46e5" stroke-width="2"/>
+        <line x1="18" y1="36" x2="30" y2="36" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="10" x2="17" y2="13" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/>
+        <line x1="34" y1="10" x2="31" y2="13" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/>
+        <line x1="8" y1="20" x2="12" y2="20" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/>
+        <line x1="40" y1="20" x2="36" y2="20" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="tool-name">我觉得系统应该是这样的</div>
+    <div class="tool-desc">提交和跟踪需求与想法，支持评论、点赞、进度管理</div>
+  </a>
+</div>
+{% endblock %}
