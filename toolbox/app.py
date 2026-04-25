@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import sqlite3
 import socket
 import uuid
@@ -19,12 +20,15 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "data.db")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 STATE_FILE = os.path.join(DATA_DIR, "flowchart_state.json")
+VERSIONS_DIR = os.path.join(DATA_DIR, "flowchart_versions")
+VERSIONS_INDEX = os.path.join(DATA_DIR, "flowchart_versions_index.json")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, ".secret_key")
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp", "bmp"}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 
 def _load_or_create_secret_key():
@@ -229,6 +233,72 @@ def _load_flowchart_state():
         return {}
 
 
+# ---------- Flowchart versioning ----------
+def _state_hash(state):
+    """Hash only structural content (exclude view/transient fields)."""
+    if not isinstance(state, dict):
+        return ""
+    core = {
+        "nodes": state.get("nodes") or {},
+        "edges": state.get("edges") or {},
+        "groups": state.get("groups") or {},
+        "defaultColor": state.get("defaultColor"),
+    }
+    s = json.dumps(core, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def _load_versions_index():
+    if not os.path.exists(VERSIONS_INDEX):
+        return {"next_n": 1, "versions": []}
+    try:
+        with open(VERSIONS_INDEX, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if "next_n" not in data:
+                data["next_n"] = 1
+            if "versions" not in data:
+                data["versions"] = []
+            return data
+    except Exception:
+        return {"next_n": 1, "versions": []}
+
+
+def _save_versions_index(idx):
+    tmp = VERSIONS_INDEX + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(idx, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, VERSIONS_INDEX)
+
+
+def _write_version(state, author, trigger):
+    """Write a new version snapshot. Caller must hold _flowchart_lock.
+    Returns metadata dict, or None if no-change (skipped)."""
+    h = _state_hash(state)
+    idx = _load_versions_index()
+    if idx["versions"] and idx["versions"][-1].get("hash") == h:
+        return None  # identical to last version, skip
+    n = idx["next_n"]
+    ts = datetime.now().isoformat(timespec="seconds")
+    meta = {
+        "n": n,
+        "ts": ts,
+        "author": author or "unknown",
+        "trigger": trigger or "manual",
+        "hash": h,
+        "node_count": len(state.get("nodes") or {}),
+        "edge_count": len(state.get("edges") or {}),
+    }
+    fp = os.path.join(VERSIONS_DIR, f"v{n}.json")
+    tmp = fp + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, fp)
+    idx["versions"].append(meta)
+    idx["next_n"] = n + 1
+    _save_versions_index(idx)
+    return meta
+
+
 @app.route("/flowchart/api/state", methods=["GET", "POST"])
 @login_required
 def flowchart_state():
@@ -282,6 +352,71 @@ def flowchart_presence():
             if k != uid
         ]
     return jsonify({"active": active})
+
+
+@app.route("/flowchart/api/version", methods=["POST"])
+@login_required
+def flowchart_save_version():
+    """Save current state as a new version. Trigger comes from client.
+    Idempotent: skips save if state is unchanged from last version."""
+    payload = request.get_json(silent=True) or {}
+    trigger = (payload.get("trigger") or "manual").strip()[:32]
+    author = session.get("user_name", "unknown")
+    with _flowchart_lock:
+        current = _load_flowchart_state()
+        if not (current.get("nodes") or current.get("groups")):
+            return jsonify({"saved": False, "reason": "empty"})
+        meta = _write_version(current, author, trigger)
+        if meta is None:
+            idx = _load_versions_index()
+            last = idx["versions"][-1] if idx["versions"] else None
+            return jsonify({"saved": False, "reason": "no-change", "lastVersion": last})
+    return jsonify({"saved": True, "version": meta})
+
+
+@app.route("/flowchart/api/versions", methods=["GET"])
+@login_required
+def flowchart_list_versions():
+    idx = _load_versions_index()
+    return jsonify({"versions": idx.get("versions", [])})
+
+
+@app.route("/flowchart/api/versions/<int:n>", methods=["GET"])
+@login_required
+def flowchart_get_version(n):
+    fp = os.path.join(VERSIONS_DIR, f"v{n}.json")
+    if not os.path.exists(fp):
+        abort(404)
+    with open(fp, "r", encoding="utf-8") as f:
+        return jsonify(json.load(f))
+
+
+@app.route("/flowchart/api/versions/<int:n>/restore", methods=["POST"])
+@login_required
+def flowchart_restore_version(n):
+    fp = os.path.join(VERSIONS_DIR, f"v{n}.json")
+    if not os.path.exists(fp):
+        abort(404)
+    with open(fp, "r", encoding="utf-8") as f:
+        target = json.load(f)
+    author = session.get("user_name", "unknown")
+    with _flowchart_lock:
+        current = _load_flowchart_state()
+        # First archive current state (so restore is reversible) if it differs
+        if current and (current.get("nodes") or current.get("groups")):
+            _write_version(current, author, f"pre-restore-from-v{n}")
+        # Bump _version on top of current to avoid breaking active editors' conflict check
+        target["_version"] = int(current.get("_version", 0)) + 1
+        # Drop transient view fields so editors don't get yanked around
+        target.pop("pan", None)
+        target.pop("zoom", None)
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(target, f, ensure_ascii=False)
+        os.replace(tmp, STATE_FILE)
+        # Snapshot the restored state as a new version too
+        meta = _write_version(target, author, f"restore-from-v{n}")
+    return jsonify({"restored": True, "version": meta, "newServerVersion": target["_version"]})
 
 
 # ---------- REQUESTS ----------
