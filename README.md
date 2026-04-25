@@ -192,6 +192,8 @@ http://<windows-机器-IP>:5000
 
 适合：要给跨地区员工访问，或需要 HTTPS、备份策略、监控告警的场景。下面以 Ubuntu 22.04 + nginx 为例。
 
+> **同一台服务器跑多个子域名**（例如 `toolbox.droplets.com.cn` + `watermirror.droplets.com.cn`）：参见 [`deploy/README.md`](deploy/README.md) 和一键脚本 [`deploy/setup-nginx.sh`](deploy/setup-nginx.sh)。
+
 ### 1. 系统准备
 
 ```bash
@@ -304,40 +306,78 @@ sudo tail -f /var/log/nginx/access.log
 
 ---
 
-## 三、Docker 部署（可选）
+## 三、Docker 部署
 
-最小 `Dockerfile`（放在 `toolbox/` 内）：
+仓库根目录已经准备好 [`Dockerfile`](Dockerfile)、[`docker-compose.yml`](docker-compose.yml)、[`docker-entrypoint.sh`](docker-entrypoint.sh)、[`.dockerignore`](.dockerignore)，`docker compose up -d --build` 一条命令即可部署。
 
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-ENV SERVER_MODE=prod PORT=5000
-EXPOSE 5000
-CMD ["python", "app.py"]
-```
-
-`docker-compose.yml`：
-
-```yaml
-services:
-  toolbox:
-    build: ./toolbox
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./toolbox/data:/app/data
-      - ./toolbox/uploads:/app/uploads
-      - ./toolbox/data.db:/app/data.db
-    restart: unless-stopped
-```
+### 1. 启动
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f
 ```
+
+### 2. 访问
+
+```
+http://<宿主机-IP>:5000
+```
+
+### 3. 数据持久化
+
+所有运行时数据写入仓库根目录下的 `./docker-data/`，由容器内的 entrypoint 脚本 symlink 到 `/app/`：
+
+```
+docker-data/
+├── data.db                          # 用户、需求、评论 SQLite
+├── secret_key                       # session 签名密钥（容器内会被 link 成 .secret_key）
+├── data/
+│   ├── flowchart_state.json         # 流程图当前状态
+│   └── flowchart_versions/          # 历史版本快照 + 索引
+└── uploads/                         # 上传图片
+```
+
+容器升级 / 重建不会丢数据。备份只需打包这一个目录：
+
+```bash
+tar -czf toolbox-backup-$(date +%Y%m%d).tar.gz docker-data/
+```
+
+### 4. 常用命令
+
+```bash
+# 重启
+docker compose restart
+
+# 部署新版本（拉代码 + 重建镜像）
+git pull
+docker compose up -d --build
+
+# 进容器看
+docker compose exec toolbox sh
+
+# 停止并移除（数据保留在 docker-data/）
+docker compose down
+
+# 完全清理（含镜像）
+docker compose down --rmi local
+```
+
+### 5. 健康检查
+
+`docker compose ps` 输出的 STATUS 列会显示 `Up X (healthy)` — 容器内置健康检查每 30 秒探一次 `/login`。
+
+### 6. 反向代理 + HTTPS
+
+如果想对外提供 HTTPS，建议在前面套一层 nginx / Caddy / Traefik。例如 Caddy 一行配置：
+
+```
+toolbox.your-domain.com {
+    reverse_proxy 127.0.0.1:5000
+}
+```
+
+Caddy 自动申请并续期 Let's Encrypt 证书。
 
 ---
 

@@ -1,0 +1,35 @@
+# VCS / IDE
+.git
+.gitignore
+.github
+.idea
+.vscode
+.claude
+.DS_Store
+
+# Python virtualenvs and caches
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+
+# Node (other subprojects we don't ship in this image)
+**/node_modules
+custom-flow-chart
+requestFromToBoyang
+
+# Runtime data — must NOT be baked into the image; comes from the bind mount
+toolbox/data
+toolbox/uploads
+toolbox/data.db
+toolbox/.secret_key
+toolbox/__pycache__
+toolbox/data/launchd.*.log
+
+# Local-only docs / build artifacts
+docker-data
+LICENSE

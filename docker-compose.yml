@@ -1,0 +1,49 @@
+# 用法：
+#   docker compose up -d --build      # 启动（首次构建）
+#   docker compose logs -f            # 看日志
+#   docker compose restart            # 重启
+#   docker compose down               # 停止并移除容器（数据保留在 ./docker-data/）
+#
+# 数据持久化：所有运行时数据写入 ./docker-data/
+#   - data.db                 用户/需求/评论 SQLite
+#   - secret_key              session 签名密钥
+#   - data/                   流程图状态 + 历史版本
+#   - uploads/                上传图片
+
+services:
+  toolbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rongxin-toolbox:latest
+    container_name: rongxin-toolbox
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      SERVER_MODE: prod
+      PORT: "5000"
+      TZ: Asia/Shanghai
+
+    volumes:
+      # 一个 bind mount 搞定所有持久化文件，方便备份和迁移
+      - ./docker-data:/persist
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:5000/login', timeout=3); sys.exit(0)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
