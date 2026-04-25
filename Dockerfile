@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.6
 FROM python:3.12-slim
 
 # System packages: tini for proper PID 1 signal handling
