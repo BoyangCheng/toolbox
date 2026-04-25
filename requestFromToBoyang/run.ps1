@@ -1,9 +1,17 @@
-# PowerShell 启动脚本
+﻿# PowerShell 启动脚本
 # 如提示"无法加载此脚本"，请先以管理员身份运行：
 #   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+# 强制控制台与 PowerShell 输出使用 UTF-8（中文 Windows 默认 GBK 会乱码）
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    [Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    chcp 65001 > $null
+} catch {}
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host " 我觉得系统应该是这样的 !" -ForegroundColor Cyan
