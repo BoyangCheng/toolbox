@@ -87,6 +87,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 #versions-modal .v-trigger.pre-restore{background:#f3e8ff;color:#6b21a8}
 #versions-modal .v-actions{display:flex;gap:6px}
 #versions-modal .v-actions .btn{padding:4px 10px;font-size:12px}
+#details-modal .modal{max-width:640px;width:92vw;max-height:85vh;display:flex;flex-direction:column;padding:24px 28px;gap:14px}
+#details-modal h3{margin:0;font-size:17px;color:#1f2937}
+#details-modal .field{display:flex;flex-direction:column;gap:6px}
+#details-modal .field label{font-size:12px;color:#6b7280;font-weight:600;letter-spacing:.3px}
+#details-modal input.text,#details-modal textarea{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;color:#1f2937;outline:none;transition:border-color .12s}
+#details-modal input.text:focus,#details-modal textarea:focus{border-color:#4f46e5}
+#details-modal textarea{resize:vertical;min-height:80px;line-height:1.5}
+#details-modal .att-list{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto}
+#details-modal .att-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px;background:#fafbfc}
+#details-modal .att-item .att-name{flex:1;font-size:13px;color:#1f2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#details-modal .att-item .att-name a{color:#4f46e5;text-decoration:none}
+#details-modal .att-item .att-name a:hover{text-decoration:underline}
+#details-modal .att-item .att-size{font-size:11px;color:#9ca3af;flex-shrink:0}
+#details-modal .att-item .att-del{background:transparent;border:1px solid #fca5a5;color:#dc2626;font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer}
+#details-modal .att-item .att-del:hover{background:#fef2f2}
+#details-modal .att-empty{color:#9ca3af;font-size:12px;text-align:center;padding:14px;border:1px dashed #e5e7eb;border-radius:6px}
+#details-modal .att-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#details-modal .save-hint{font-size:11px;color:#9ca3af}
 </style>
 </head>
 <body>
@@ -145,6 +163,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
     </div>
   </div>
 </div>
+<div id="details-modal" class="modal-bg">
+  <div class="modal">
+    <h3 id="details-title">节点详情</h3>
+    <div class="field">
+      <label>标签</label>
+      <input type="text" id="details-label" class="text" placeholder="节点标签">
+    </div>
+    <div class="field">
+      <label>详细说明</label>
+      <textarea id="details-desc" placeholder="补充说明、背景、注意事项..."></textarea>
+    </div>
+    <div class="field">
+      <label>附件</label>
+      <div id="details-attachments" class="att-list"></div>
+      <div class="att-actions">
+        <input type="file" id="details-file-input" hidden>
+        <button class="btn" onclick="document.getElementById('details-file-input').click()">📎 上传文件</button>
+        <span class="save-hint">改动会自动保存</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="closeDetailsModal()">完成</button>
+    </div>
+  </div>
+</div>
 <div id="copy-toast"></div>
 <div id="toolbar">
   <button class="tbtn active" id="btn-sel" onclick="setTool('sel')" title="V">↖ 选择</button>
@@ -162,7 +205,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
   <button class="tbtn" onclick="ungroupSel()">⊟ 拆分组</button>
   <div class="sep"></div>
   <button class="tbtn red" onclick="delSel()">🗑 删除</button>
-  <button class="tbtn" onclick="clearAll()">清空</button>
   <div class="sep"></div>
   <button class="tbtn" onclick="copySelection()" title="Ctrl/Cmd+C">📋 复制</button>
   <button class="tbtn" onclick="pasteClipboard()" title="Ctrl/Cmd+V">📥 粘贴</button>
@@ -207,6 +249,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 </div>
 <div id="ctx">
   <div class="citem" id="ctx-edit" onclick="ctxEdit()">✏️ 编辑标签</div>
+  <div class="citem" id="ctx-details" onclick="ctxDetails()">📝 查看详情</div>
   <div class="citem" id="ctx-grp" onclick="ctxGroup()">⊞ 合并成组</div>
   <div class="citem" id="ctx-ungrp" onclick="ctxUngroup()">⊟ 拆分组</div>
   <div class="csep"></div>
@@ -692,7 +735,10 @@ function onNodeDown(e,id){
   if(e.button!==0)return;
   e.stopPropagation();hideCtx();
   if(!e.shiftKey&&!S.sel.has(id))S.sel.clear();
-  S.sel.add(id);render();
+  S.sel.add(id);
+  // 选中节点后自动切到 pan 工具：方向键平移、画布点击 = 平移而非框选
+  if(S.tool==='add'||S.tool==='sel')setTool('pan');
+  render();
   const preSnap=snapState();
   startDragNodes(e,preSnap);
 }
@@ -867,15 +913,104 @@ function showCtx(e,id){
   ctx.style.left=e.clientX+'px';ctx.style.top=e.clientY+'px';
   const isNode=!!S.nodes[id],isGrp=!!S.groups[id],isEdge=!!S.edges[id];
   document.getElementById('ctx-edit').style.display=isEdge?'none':'flex';
+  document.getElementById('ctx-details').style.display=isNode?'flex':'none';
   document.getElementById('ctx-grp').style.display=S.sel.size>=2&&![...S.sel].every(i=>S.edges[i])?'flex':'none';
   document.getElementById('ctx-ungrp').style.display=isGrp?'flex':'none';
 }
 function hideCtx(){ctx.style.display='none';}
 document.addEventListener('click',hideCtx);
 function ctxEdit(){hideCtx();if(ctxId){const t=S.nodes[ctxId]?'node':'group';editLabel(ctxId,t);}}
+function ctxDetails(){hideCtx();if(ctxId&&S.nodes[ctxId])openDetailsModal(ctxId);}
 function ctxGroup(){hideCtx();groupSel();}
 function ctxUngroup(){hideCtx();if(ctxId&&S.groups[ctxId]){ungroupId(ctxId);render();}}
 function ctxDel(){hideCtx();if(ctxId){if(!S.sel.has(ctxId)){S.sel.clear();S.sel.add(ctxId);}delSel();}}
+
+// ── DETAILS MODAL (节点详情：标签 / 说明 / 附件) ─────────
+let _detailsNodeId=null;
+function openDetailsModal(nodeId){
+  const n=S.nodes[nodeId];if(!n)return;
+  _detailsNodeId=nodeId;
+  document.getElementById('details-title').textContent=`节点详情 — ${n.label||'(无标签)'}`;
+  document.getElementById('details-label').value=n.label||'';
+  document.getElementById('details-desc').value=n.description||'';
+  document.getElementById('details-modal').classList.add('show');
+  renderAttachments();
+}
+function closeDetailsModal(){
+  document.getElementById('details-modal').classList.remove('show');
+  _detailsNodeId=null;
+}
+function fmtSize(bytes){
+  if(bytes<1024)return bytes+' B';
+  if(bytes<1024*1024)return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/1024/1024).toFixed(2)+' MB';
+}
+function renderAttachments(){
+  if(!_detailsNodeId)return;
+  const n=S.nodes[_detailsNodeId];if(!n)return;
+  const list=document.getElementById('details-attachments');
+  const atts=n.attachments||[];
+  if(!atts.length){
+    list.innerHTML='<div class="att-empty">还没有附件，点上方"上传文件"添加</div>';
+    return;
+  }
+  list.innerHTML=atts.map((a,i)=>{
+    const safeName=(a.name||'未命名').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+    return `<div class="att-item">
+      <div class="att-name"><a href="/uploads/${a.id}" target="_blank">📄 ${safeName}</a></div>
+      <span class="att-size">${fmtSize(a.size||0)}</span>
+      <button class="att-del" onclick="deleteAttachment('${a.id}')">删除</button>
+    </div>`;
+  }).join('');
+}
+async function uploadAttachment(file){
+  if(!_detailsNodeId||!file)return;
+  const fd=new FormData();fd.append('file',file);
+  showToast('上传中...');
+  try{
+    const res=await fetch('/flowchart/api/upload',{method:'POST',body:fd});
+    if(!res.ok){showToast('上传失败');return;}
+    const data=await res.json();
+    const n=S.nodes[_detailsNodeId];if(!n)return;
+    pushHistory();
+    if(!n.attachments)n.attachments=[];
+    n.attachments.push({id:data.id,name:data.name,size:data.size});
+    render();                  // 自动保存到服务端
+    renderAttachments();
+    showToast('已上传 ✓');
+  }catch(e){showToast('上传失败：'+e.message);}
+}
+async function deleteAttachment(attId){
+  if(!_detailsNodeId)return;
+  if(!confirm('确认删除这个附件？文件会从服务器物理删除。'))return;
+  try{
+    await fetch('/flowchart/api/upload/'+encodeURIComponent(attId),{method:'DELETE'});
+  }catch(e){console.warn('delete file failed',e);}
+  const n=S.nodes[_detailsNodeId];if(!n)return;
+  pushHistory();
+  n.attachments=(n.attachments||[]).filter(a=>a.id!==attId);
+  render();
+  renderAttachments();
+  showToast('已删除 ✓');
+}
+// 标签和说明：失焦时保存到节点
+document.getElementById('details-label').addEventListener('blur',function(){
+  if(!_detailsNodeId)return;
+  const n=S.nodes[_detailsNodeId];if(!n)return;
+  const v=this.value.trim();
+  if(n.label!==v){pushHistory();n.label=v;render();}
+});
+document.getElementById('details-desc').addEventListener('blur',function(){
+  if(!_detailsNodeId)return;
+  const n=S.nodes[_detailsNodeId];if(!n)return;
+  const v=this.value;
+  if((n.description||'')!==v){pushHistory();n.description=v;render();}
+});
+document.getElementById('details-file-input').addEventListener('change',function(){
+  const f=this.files[0];
+  if(f)uploadAttachment(f);
+  this.value='';   // reset 让相同文件能重新选
+});
 
 // ── LABEL EDIT ────────────────────────────────────────────
 let editId=null,editT=null;
@@ -943,6 +1078,18 @@ document.addEventListener('keydown',e=>{
     if(kL==='c'){e.preventDefault();copySelection();return;}
     if(kL==='v'){e.preventDefault();pasteClipboard();return;}
     return; // any other modified key — let browser handle
+  }
+
+  // ── Arrow keys: pan canvas (Shift = 大步) ──
+  if(k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown'){
+    e.preventDefault();
+    const step=e.shiftKey?200:50;
+    if(k==='ArrowLeft') S.pan.x+=step;
+    if(k==='ArrowRight')S.pan.x-=step;
+    if(k==='ArrowUp')   S.pan.y+=step;
+    if(k==='ArrowDown') S.pan.y-=step;
+    applyTx();
+    return;
   }
 
   // ── Bare-key shortcuts ──

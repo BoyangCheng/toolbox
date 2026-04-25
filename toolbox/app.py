@@ -423,6 +423,45 @@ def flowchart_restore_version(n):
     return jsonify({"restored": True, "version": meta, "newServerVersion": target["_version"]})
 
 
+# ---------- Flowchart node attachments ----------
+@app.route("/flowchart/api/upload", methods=["POST"])
+@login_required
+def flowchart_upload():
+    """Upload a file to be attached to a flowchart node.
+    Returns {id, name, size, url} where id is the saved filename and url is
+    the path to fetch / link to the file. Reuses /uploads/<filename>."""
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "no_file"}), 400
+    ext = ""
+    if "." in file.filename:
+        ext = "." + file.filename.rsplit(".", 1)[1].lower()
+    file_id = uuid.uuid4().hex + ext
+    fp = os.path.join(UPLOAD_DIR, file_id)
+    file.save(fp)
+    return jsonify({
+        "id": file_id,
+        "name": file.filename,
+        "size": os.path.getsize(fp),
+        "url": url_for("uploaded_file", filename=file_id),
+    })
+
+
+@app.route("/flowchart/api/upload/<path:file_id>", methods=["DELETE"])
+@login_required
+def flowchart_upload_delete(file_id):
+    # Sanity check: prevent path traversal
+    if "/" in file_id or ".." in file_id or file_id.startswith("."):
+        return jsonify({"error": "bad_id"}), 400
+    fp = os.path.join(UPLOAD_DIR, file_id)
+    if os.path.exists(fp):
+        try:
+            os.remove(fp)
+        except OSError:
+            pass
+    return jsonify({"deleted": True})
+
+
 # ---------- REQUESTS ----------
 @app.route("/requests")
 @login_required
