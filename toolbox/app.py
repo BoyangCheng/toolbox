@@ -32,8 +32,12 @@ os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 
 def _load_or_create_secret_key():
+    """Load existing key or generate a new one. Treats an empty file as missing
+    (e.g. when bind-mount entrypoint pre-touched an empty placeholder)."""
     if os.path.exists(SECRET_KEY_FILE):
-        return open(SECRET_KEY_FILE).read().strip()
+        existing = open(SECRET_KEY_FILE).read().strip()
+        if existing:
+            return existing
     key = secrets.token_hex(32)
     with open(SECRET_KEY_FILE, "w") as f:
         f.write(key)

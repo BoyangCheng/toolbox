@@ -12,9 +12,11 @@ mkdir -p \
   "$PERSIST/data/flowchart_versions" \
   "$PERSIST/uploads"
 
-# data.db and .secret_key are files — create empty placeholders if missing
-[ -e "$PERSIST/data.db" ]    || : > "$PERSIST/data.db"
-[ -e "$PERSIST/secret_key" ] || : > "$PERSIST/secret_key"
+# data.db is a file — create empty placeholder so bind-mount doesn't make it a directory
+[ -e "$PERSIST/data.db" ] || : > "$PERSIST/data.db"
+# DO NOT pre-create secret_key as an empty file — Flask treats empty SECRET_KEY as missing
+# and refuses to use sessions. Let app._load_or_create_secret_key() generate it on first run.
+# (The dangling symlink below is fine: open(..., "w") creates the target file when written.)
 
 # Replace any baked-in paths in /app with symlinks to the persistent volume
 # (rm -rf is safe because these only contain runtime state, not source code)
