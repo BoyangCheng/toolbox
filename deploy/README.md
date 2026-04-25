@@ -94,3 +94,149 @@ sudo tail -f /var/log/nginx/watermirror.access.log
 | 域名解析不到 | DNS 还没生效：`dig +short <域名>` |
 | HTTPS 申请失败 | 80 端口被占 / 安全组没开 / DNS 未生效 |
 | `nginx -t` fail | 看 `/etc/nginx/sites-enabled/` 下哪个文件报错，逐个排查 |
+
+---
+
+# 阿里云 ECS 从零部署完整流程
+
+适用：刚买好的阿里云 ECS（Ubuntu 22.04），同一台机器跑 toolbox + watermirror。
+
+## 1. 阿里云控制台
+
+**ECS → 安全组 → 入方向规则**：开放
+- TCP `22`（SSH）
+- TCP `80`（HTTP）
+- TCP `443`（HTTPS）
+
+`5000` / `3000` 不开，nginx 做唯一入口。
+
+**确认主域名 ICP 备案**已通过（"备案"控制台查），子域名继承备案。
+
+## 2. SSH 连接 + 系统初始化
+
+```bash
+ssh root@<ECS公网IP>
+```
+
+```bash
+apt update && apt upgrade -y
+apt install -y git curl ufw
+timedatectl set-timezone Asia/Shanghai
+
+# 创建非 root 业务用户
+useradd -m -s /bin/bash deploy
+usermod -aG sudo deploy
+mkdir -p /home/deploy/.ssh
+cp /root/.ssh/authorized_keys /home/deploy/.ssh/
+chown -R deploy:deploy /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
+chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+后续 `ssh deploy@<IP>`，`sudo` 提权。
+
+## 3. 装 Docker
+
+```bash
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+sudo usermod -aG docker deploy
+# 退出 SSH 重连让 docker 组生效
+```
+
+国内拉镜像慢的话配阿里云镜像加速器（控制台 → 容器镜像服务 → 镜像加速器），写到 `/etc/docker/daemon.json`：
+
+```json
+{"registry-mirrors":["https://<你的ID>.mirror.aliyuncs.com"]}
+```
+
+```bash
+sudo systemctl restart docker
+```
+
+## 4. 部署 toolbox
+
+```bash
+cd ~
+git clone https://github.com/BoyangCheng/toolbox.git
+cd toolbox
+docker compose up -d --build
+docker compose logs -f
+# 看到 Serving on http://0.0.0.0:5000 即 OK
+
+curl -sI http://127.0.0.1:5000/login
+# HTTP/1.1 200 OK + Server: waitress
+```
+
+数据持久化在 `~/toolbox/docker-data/`，备份打包这一个目录即可。
+
+## 5. 部署 watermirror
+
+```bash
+cd ~
+git clone <watermirror-repo-url> waterMirror
+cd waterMirror
+docker compose up -d --build
+curl -sI http://127.0.0.1:3000/
+```
+
+> 想限制后端只能本机访问，把 compose 里的 `ports: - "3000:3000"` 改成 `ports: - "127.0.0.1:3000:3000"`。toolbox 同理。
+
+## 6. 配 nginx + HTTPS
+
+```bash
+cd ~/toolbox
+sudo ./deploy/setup-nginx.sh --https your-email@example.com
+```
+
+## 7. 验证
+
+```bash
+dig +short toolbox.droplets.com.cn
+dig +short watermirror.droplets.com.cn
+curl -I https://toolbox.droplets.com.cn
+curl -I https://watermirror.droplets.com.cn
+sudo tail -f /var/log/nginx/toolbox.access.log
+docker compose -f ~/toolbox/docker-compose.yml ps
+```
+
+## 8. 日常运维
+
+```bash
+# 部署 toolbox 新版本
+cd ~/toolbox && git pull && docker compose up -d --build
+
+# 部署 watermirror 新版本
+cd ~/waterMirror && git pull && docker compose up -d --build
+
+# 重载 nginx
+sudo nginx -t && sudo systemctl reload nginx
+
+# 证书状态
+sudo certbot certificates
+sudo certbot renew --dry-run
+
+# 备份 toolbox 数据
+tar -czf ~/backups/toolbox-$(date +%Y%m%d).tar.gz -C ~/toolbox docker-data/
+
+# 进容器调试
+docker compose -f ~/toolbox/docker-compose.yml exec toolbox sh
+```
+
+## 9. 常见坑
+
+| 现象 | 原因 / 解决 |
+|---|---|
+| `docker compose up` 拉镜像慢 | 配阿里云镜像加速器（第 3 步备注） |
+| 域名访问超时 | 安全组没开 80/443，或 DNS 没生效 |
+| HTTPS 申请 `Connection refused` | DNS 未生效 / 80 端口被占 |
+| 502 Bad Gateway | 后端容器没起 / 端口不对（`docker compose ps`） |
+| 容器频繁重启 | `docker compose logs --tail=100 <服务>` 看错误 |
