@@ -5,6 +5,7 @@ deploy/
 ├── nginx/
 │   ├── toolbox.conf        # toolbox.droplets.com.cn → 127.0.0.1:5000
 │   └── watermirror.conf    # watermirror.droplets.com.cn → 127.0.0.1:3000
+├── setup-docker.sh         # 一键装 Docker + 配多镜像加速器（国内必备）
 ├── setup-nginx.sh          # 一键部署 nginx + 申请 HTTPS
 └── README.md               # 本文件
 ```
@@ -135,31 +136,35 @@ chmod 600 /home/deploy/.ssh/authorized_keys
 
 后续 `ssh deploy@<IP>`，`sudo` 提权。
 
-## 3. 装 Docker
+## 3. 装 Docker + 配镜像加速
+
+国内 ECS 必做。一键脚本：
 
 ```bash
-sudo apt install -y ca-certificates curl gnupg
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+cd ~
+git clone https://github.com/BoyangCheng/toolbox.git
+cd toolbox
 
+# 同时安装 Docker + 配多镜像加速
+sudo ./deploy/setup-docker.sh --install
+
+# 让 deploy 用户免 sudo 用 docker
 sudo usermod -aG docker deploy
 # 退出 SSH 重连让 docker 组生效
 ```
 
-国内拉镜像慢的话配阿里云镜像加速器（控制台 → 容器镜像服务 → 镜像加速器），写到 `/etc/docker/daemon.json`：
+脚本做了这几件事：
+1. 通过阿里云 apt mirror 装 docker-ce + buildx + compose-plugin
+2. 探测 5 个国内公益 mirror（DaoCloud / dockerproxy / NJU / 百度云 / 1Panel）的连通性
+3. 把通的排前面写到 `/etc/docker/daemon.json`，自动 fallback
+4. 重启 docker daemon 并拉 hello-world 验证
 
-```json
-{"registry-mirrors":["https://<你的ID>.mirror.aliyuncs.com"]}
-```
+> **不要只用阿里云免费 mirror**（`xxx.mirror.aliyuncs.com`）—— 它从 2024 年起逐步退化，对常见镜像经常返回 404。脚本里默认用的多 mirror 组合更稳。
+
+如果 Docker 已装好，只需补 mirror 配置：
 
 ```bash
-sudo systemctl restart docker
+sudo ./deploy/setup-docker.sh
 ```
 
 ## 4. 部署 toolbox
@@ -235,7 +240,7 @@ docker compose -f ~/toolbox/docker-compose.yml exec toolbox sh
 
 | 现象 | 原因 / 解决 |
 |---|---|
-| `docker compose up` 拉镜像慢 | 配阿里云镜像加速器（第 3 步备注） |
+| `docker compose up` 拉镜像慢/404 | 跑 `sudo ./deploy/setup-docker.sh` 配多镜像加速 |
 | 域名访问超时 | 安全组没开 80/443，或 DNS 没生效 |
 | HTTPS 申请 `Connection refused` | DNS 未生效 / 80 端口被占 |
 | 502 Bad Gateway | 后端容器没起 / 端口不对（`docker compose ps`） |
