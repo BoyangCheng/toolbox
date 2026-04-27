@@ -32,6 +32,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 .node-text{font-size:13px;fill:#333;text-anchor:middle;dominant-baseline:middle;pointer-events:none;user-select:none}
 .cp{fill:#fff;stroke:#4285f4;stroke-width:2;cursor:crosshair;opacity:0;transition:opacity .15s}
 .node-wrap:hover .cp,.cp.show{opacity:1}
+.rh{fill:#fff;stroke:#4285f4;stroke-width:1.5;cursor:nesw-resize;opacity:0;transition:opacity .15s}
+.node-wrap:hover .rh,.grp-wrap:hover .rh,.rh.show{opacity:1}
+.rh:hover{fill:#4285f4}
 .edge-path{fill:none;stroke:#555;stroke-width:1.5}
 .edge-path.sel{stroke:#4285f4;stroke-width:2}
 .edge-hit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer}
@@ -355,7 +358,7 @@ function effNode(nodeId){
   if(!n)return null;
   const outer=outerCollapsedAnc(nodeId);
   if(outer){
-    const W=180,H=70;
+    const{W,H}=colSize(outer);
     return{id:outer.id,x:outer.cx,y:outer.cy,w:W,h:H,_isGroup:true,_gid:outer.id};
   }
   return n;
@@ -389,6 +392,8 @@ function svgE(tag,attrs){
   for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);
   return e;
 }
+// 折叠组的实际渲染尺寸（支持用户拉伸）
+function colSize(g){return{W:g.colW||180,H:g.colH||70};}
 
 // ── RENDER ────────────────────────────────────────────────
 function render(){renderGroups();renderEdges();renderNodes();}
@@ -401,7 +406,7 @@ function renderGroups(){
   for(const g of list){
     const sel=S.sel.has(g.id);
     const gcolor=g.color||'#1a73e8';
-    const grp=svgE('g',{'data-id':g.id,'data-t':'group'});
+    const grp=svgE('g',{'data-id':g.id,'data-t':'group','class':'grp-wrap'});
 
     const mkToggle=(x,y,txt)=>{
       const bg=svgE('g',{cursor:'pointer'});
@@ -420,7 +425,7 @@ function renderGroups(){
     };
 
     if(g.col){
-      const W=180,H=70;
+      const{W,H}=colSize(g);
       const r=svgE('rect',{x:g.cx,y:g.cy,width:W,height:H,rx:8,
         class:'grp-collapsed'+(sel?' sel':'')});
       grp.appendChild(r);
@@ -436,6 +441,10 @@ function renderGroups(){
       hit.addEventListener('dblclick',e=>{e.stopPropagation();toggleGrp(g.id);});
       grp.appendChild(hit);
       grp.appendChild(mkToggle(g.cx+W/2,g.cy+H-16,'▼ 展开'));
+      // 折叠组的右上角 resize 手柄
+      const grh=svgE('rect',{x:g.cx+W-5,y:g.cy-5,width:10,height:10,rx:2,class:'rh'});
+      grh.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();startResizeGrpCollapsed(e,g.id);});
+      grp.appendChild(grh);
     } else {
       const PAD=40,HH=32;
       const bx=g.x-PAD,by=g.y-PAD-HH,bw=g.w+PAD*2,bh=g.h+PAD*2+HH;
@@ -491,7 +500,11 @@ function renderNodes(){
       cp.addEventListener('mousedown',e=>{e.stopPropagation();startConn(e,n.id,p);});
       wrap.appendChild(cp);
     }
-    wrap.addEventListener('mousedown',e=>{if(!e.target.classList.contains('cp'))onNodeDown(e,n.id);});
+    // 右上角 resize 手柄（小方块）
+    const rh=svgE('rect',{x:n.x+n.w-5,y:n.y-5,width:10,height:10,rx:2,class:'rh'});
+    rh.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();startResizeNode(e,n.id);});
+    wrap.appendChild(rh);
+    wrap.addEventListener('mousedown',e=>{if(!e.target.classList.contains('cp')&&!e.target.classList.contains('rh'))onNodeDown(e,n.id);});
     wrap.addEventListener('dblclick',e=>{e.stopPropagation();editLabel(n.id,'node');});
     wrap.addEventListener('contextmenu',e=>showCtx(e,n.id));
     nl.appendChild(wrap);
@@ -609,7 +622,7 @@ function clearAll(){
 function itemBounds(id){
   if(S.nodes[id]){const n=S.nodes[id];return{x:n.x,y:n.y,r:n.x+n.w,b:n.y+n.h};}
   const g=S.groups[id];if(!g)return null;
-  if(g.col)return{x:g.cx,y:g.cy,r:g.cx+180,b:g.cy+70};
+  if(g.col){const{W,H}=colSize(g);return{x:g.cx,y:g.cy,r:g.cx+W,b:g.cy+H};}
   const PAD=40,HH=32;
   return{x:g.x-PAD,y:g.y-PAD-HH,r:g.x+g.w+PAD,b:g.y+g.h+PAD};
 }
@@ -713,7 +726,8 @@ function startConn(e,fromId,fromPt){
       for(const g of Object.values(S.groups)){
         if(!g.col)continue;
         if(hasCollapsedAnc(g.id))continue;
-        if(p.x>=g.cx&&p.x<=g.cx+180&&p.y>=g.cy&&p.y<=g.cy+70){
+        const cs=colSize(g);
+        if(p.x>=g.cx&&p.x<=g.cx+cs.W&&p.y>=g.cy&&p.y<=g.cy+cs.H){
           const desc=collectDesc(g.id);
           if(desc.nodes.length>0){target=desc.nodes[0];break;}
         }
@@ -814,6 +828,74 @@ function startDragNodes(e,preSnap){
   document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
 }
 
+// 节点 resize（右上角手柄）—— 锚定左下角，向上/向右拉伸
+function startResizeNode(e,id){
+  const n=S.nodes[id];if(!n)return;
+  hideCtx();
+  if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);render();}
+  const preSnap=snapState();
+  const p0=svgPt(e.clientX,e.clientY);
+  const orig={x:n.x,y:n.y,w:n.w,h:n.h};
+  const MIN_W=60,MIN_H=32;
+  const mm=e2=>{
+    const p=svgPt(e2.clientX,e2.clientY);
+    const dx=p.x-p0.x,dy=p.y-p0.y;
+    const newW=Math.max(MIN_W,orig.w+dx);
+    const newH=Math.max(MIN_H,orig.h-dy);
+    n.w=newW;
+    n.y=orig.y+(orig.h-newH);
+    n.h=newH;
+    if(n.pg)updateGrpBounds(n.pg);
+    render();
+  };
+  const mu=()=>{
+    document.removeEventListener('mousemove',mm);
+    document.removeEventListener('mouseup',mu);
+    if(snapState()!==preSnap){
+      _history.push(preSnap);
+      if(_history.length>HISTORY_MAX)_history.shift();
+      _future.length=0;
+      updateUndoUI();
+    }
+  };
+  document.addEventListener('mousemove',mm);
+  document.addEventListener('mouseup',mu);
+}
+
+// 折叠组 resize（右上角手柄）—— 改 g.colW/colH
+function startResizeGrpCollapsed(e,gid){
+  const g=S.groups[gid];if(!g||!g.col)return;
+  hideCtx();
+  if(!S.sel.has(gid)){S.sel.clear();S.sel.add(gid);render();}
+  const preSnap=snapState();
+  const p0=svgPt(e.clientX,e.clientY);
+  const W0=g.colW||180,H0=g.colH||70;
+  const orig={cy:g.cy};
+  const MIN_W=120,MIN_H=50;
+  const mm=e2=>{
+    const p=svgPt(e2.clientX,e2.clientY);
+    const dx=p.x-p0.x,dy=p.y-p0.y;
+    const newW=Math.max(MIN_W,W0+dx);
+    const newH=Math.max(MIN_H,H0-dy);
+    g.colW=newW;
+    g.cy=orig.cy+(H0-newH);
+    g.colH=newH;
+    render();
+  };
+  const mu=()=>{
+    document.removeEventListener('mousemove',mm);
+    document.removeEventListener('mouseup',mu);
+    if(snapState()!==preSnap){
+      _history.push(preSnap);
+      if(_history.length>HISTORY_MAX)_history.shift();
+      _future.length=0;
+      updateUndoUI();
+    }
+  };
+  document.addEventListener('mousemove',mm);
+  document.addEventListener('mouseup',mu);
+}
+
 cc.addEventListener('mousedown',e=>{
   if(e.button===1||(e.button===0&&(S.tool==='pan'||e.altKey))){
     S.panning=true;
@@ -863,7 +945,8 @@ document.addEventListener('mouseup',e=>{
       }
       for(const g of Object.values(S.groups)){
         if(hasCollapsedAnc(g.id))continue;
-        const gx=g.col?g.cx:g.x,gy=g.col?g.cy:g.y,gw=g.col?180:g.w,gh=g.col?70:g.h;
+        const _cs=g.col?colSize(g):null;
+        const gx=g.col?g.cx:g.x,gy=g.col?g.cy:g.y,gw=g.col?_cs.W:g.w,gh=g.col?_cs.H:g.h;
         if(gx+gw>s.x&&gx<s.x+s.w&&gy+gh>s.y&&gy<s.y+s.h)S.sel.add(g.id);
       }
     }
@@ -1024,8 +1107,8 @@ function editLabel(id,type){
   } else {
     const g=S.groups[id];label=g.label||'';
     const gx=g.col?g.cx:g.x,gy=g.col?g.cy:g.y-28;
-    const cp=clientPt(gx+(g.col?80:g.w/2),gy+14);
-    x=cp.x;y=cp.y;w=Math.max(100,(g.col?180:g.w)*S.zoom);
+    const cp=clientPt(gx+(g.col?colSize(g).W/2:g.w/2),gy+14);
+    x=cp.x;y=cp.y;w=Math.max(100,(g.col?colSize(g).W:g.w)*S.zoom);
   }
   linput.value=label;
   ledit.style.display='block';

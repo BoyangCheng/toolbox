@@ -300,7 +300,65 @@ def _write_version(state, author, trigger):
     idx["versions"].append(meta)
     idx["next_n"] = n + 1
     _save_versions_index(idx)
+    # 顺手清理旧版本（保留近 4 天全部 + 4 天前每天最晚一份）
+    try:
+        _prune_old_versions()
+    except Exception as e:
+        print(f"[prune] failed: {e}", flush=True)
     return meta
+
+
+# 保留策略：近 RECENT_DAYS 天内全部保留；超过 RECENT_DAYS 天的，每天只保留最晚一份。
+RECENT_DAYS = 4
+
+def _prune_old_versions():
+    """Delete old version snapshots according to retention policy.
+    Caller must hold _flowchart_lock. Returns number of versions deleted."""
+    idx = _load_versions_index()
+    versions = idx.get("versions", [])
+    if not versions:
+        return 0
+
+    cutoff = datetime.now() - timedelta(days=RECENT_DAYS)
+    keep = []
+    by_old_day = {}  # 'YYYY-MM-DD' -> list[meta]
+
+    for v in versions:
+        try:
+            ts = datetime.fromisoformat(v["ts"])
+        except Exception:
+            keep.append(v)  # 时间戳坏掉的保留，不冒险删
+            continue
+        if ts >= cutoff:
+            keep.append(v)
+        else:
+            day = ts.strftime("%Y-%m-%d")
+            by_old_day.setdefault(day, []).append(v)
+
+    # 4 天前每天只留 ts 最大的
+    drop = []
+    for day, day_versions in by_old_day.items():
+        day_versions.sort(key=lambda v: v["ts"])
+        keep.append(day_versions[-1])
+        drop.extend(day_versions[:-1])
+
+    if not drop:
+        return 0
+
+    # 删文件 + 更新索引
+    for v in drop:
+        fp = os.path.join(VERSIONS_DIR, f"v{v['n']}.json")
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except OSError:
+            pass
+
+    keep.sort(key=lambda v: v["n"])
+    idx["versions"] = keep
+    _save_versions_index(idx)
+    print(f"[prune] removed {len(drop)} old version(s), kept {len(keep)}", flush=True)
+    return len(drop)
 
 
 @app.route("/flowchart/api/state", methods=["GET", "POST"])
