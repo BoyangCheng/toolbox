@@ -345,18 +345,23 @@ def _prune_old_versions():
     if not drop:
         return 0
 
-    # 删文件 + 更新索引
-    for v in drop:
-        fp = os.path.join(VERSIONS_DIR, f"v{v['n']}.json")
-        try:
-            if os.path.exists(fp):
-                os.remove(fp)
-        except OSError:
-            pass
-
+    # 安全顺序：先把索引更新到只引用 keep（万一进程崩，索引和文件至少不会"互相欠债"）
     keep.sort(key=lambda v: v["n"])
     idx["versions"] = keep
     _save_versions_index(idx)
+
+    # 索引落盘成功后才物理删除快照文件；删除失败不要紧（索引不再引用 → 是孤儿文件）
+    for v in drop:
+        n = v.get("n")
+        if n is None:
+            continue  # 防御：索引里没 n 字段就跳过，不爆栈
+        fp = os.path.join(VERSIONS_DIR, f"v{n}.json")
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except OSError as e:
+            print(f"[prune] cannot remove {fp}: {e}", flush=True)
+
     print(f"[prune] removed {len(drop)} old version(s), kept {len(keep)}", flush=True)
     return len(drop)
 
