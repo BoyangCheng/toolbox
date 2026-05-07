@@ -1,5 +1,7 @@
 # 部署辅助文件
 
+> **完整部署手册**：[FULL_DEPLOY.md](FULL_DEPLOY.md) — 从零到上线所有步骤（toolbox + watermirror + nginx + HTTPS）的合订本，建议直接看那个。本文是各文件的快速索引和老旧补充内容。
+
 ```
 deploy/
 ├── nginx/
