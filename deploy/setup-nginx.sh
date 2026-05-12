@@ -67,17 +67,18 @@ for f in "${CONF_NAMES[@]}"; do
 done
 
 # ---- 安装依赖 ----
-echo "==> 检查并安装 nginx ..."
-if ! command -v nginx >/dev/null 2>&1; then
-    apt-get update
-    apt-get install -y nginx
-fi
+# nginx 和 certbot 一起装：即使本次不申请 HTTPS，certbot 也留着，以后
+# 给新域名加证书只需 `sudo certbot --nginx -d <domain>`，不用重跑此脚本。
+echo "==> 检查并安装 nginx + certbot ..."
+NEED_INSTALL=()
+command -v nginx   >/dev/null 2>&1 || NEED_INSTALL+=(nginx)
+command -v certbot >/dev/null 2>&1 || NEED_INSTALL+=(certbot python3-certbot-nginx)
 
-if [[ $ENABLE_HTTPS -eq 1 ]]; then
-    echo "==> 检查并安装 certbot ..."
-    if ! command -v certbot >/dev/null 2>&1; then
-        apt-get install -y certbot python3-certbot-nginx
-    fi
+if [[ ${#NEED_INSTALL[@]} -gt 0 ]]; then
+    apt-get update
+    apt-get install -y "${NEED_INSTALL[@]}"
+else
+    echo "  - nginx 和 certbot 已装，跳过"
 fi
 
 # ---- 拷贝配置 ----
