@@ -102,6 +102,14 @@ def init_db():
         cols = [r["name"] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()]
         if "ip" not in cols:
             cur.execute(f"ALTER TABLE {table} ADD COLUMN ip TEXT")
+    # v2: 项目总进度所需字段
+    req_cols = [r["name"] for r in cur.execute("PRAGMA table_info(requirements)").fetchall()]
+    if "category" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN category TEXT DEFAULT '其他'")
+    if "progress" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN progress INTEGER DEFAULT 0")
+    if "priority" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN priority TEXT DEFAULT '中'")
     conn.commit()
     conn.close()
 
@@ -523,6 +531,158 @@ def flowchart_upload_delete(file_id):
         except OSError:
             pass
     return jsonify({"deleted": True})
+
+
+# ---------- MODULES & PROGRESS ----------
+MODULES = [
+    {"key": "selling", "name": "销售", "icon": "📊", "color": "#4f46e5"},
+    {"key": "buying", "name": "采购", "icon": "🛒", "color": "#0891b2"},
+    {"key": "stock", "name": "库存", "icon": "📦", "color": "#059669"},
+    {"key": "manufacturing", "name": "制造", "icon": "🏭", "color": "#d97706"},
+    {"key": "hr", "name": "人力资源", "icon": "👥", "color": "#dc2626"},
+    {"key": "accounting", "name": "会计", "icon": "💰", "color": "#7c3aed"},
+    {"key": "projects", "name": "项目管理", "icon": "📋", "color": "#2563eb"},
+    {"key": "crm", "name": "CRM", "icon": "🤝", "color": "#db2777"},
+    {"key": "asset", "name": "资产管理", "icon": "🏢", "color": "#65a30d"},
+    {"key": "cost", "name": "成本", "icon": "💲", "color": "#ea580c"},
+    {"key": "other", "name": "其他", "icon": "📌", "color": "#6b7280"},
+]
+MODULE_MAP = {m["key"]: m for m in MODULES}
+VALID_CATEGORIES = [m["key"] for m in MODULES]
+VALID_PRIORITIES = ["高", "中", "低"]
+
+
+@app.route("/progress")
+@login_required
+def progress_dashboard():
+    return render_template("progress.html", modules=MODULES)
+
+
+@app.route("/api/progress")
+@login_required
+def api_progress():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT r.*, "
+        "(SELECT COUNT(*) FROM comments c WHERE c.requirement_id = r.id) AS comment_count "
+        "FROM requirements r ORDER BY r.id DESC"
+    ).fetchall()
+    conn.close()
+
+    all_tasks = [dict(r) for r in rows]
+    total = len(all_tasks)
+    completed = sum(1 for t in all_tasks if t["status"] == "已完成")
+    in_progress = sum(1 for t in all_tasks if t["status"] == "进行中")
+    pending = sum(1 for t in all_tasks if t["status"] == "待处理")
+    shelved = sum(1 for t in all_tasks if t["status"] == "已搁置")
+    avg_progress = round(sum(t.get("progress", 0) or 0 for t in all_tasks) / max(total, 1))
+
+    modules_data = []
+    for m in MODULES:
+        tasks = [t for t in all_tasks if (t.get("category") or "other") == m["key"]]
+        mod_total = len(tasks)
+        mod_completed = sum(1 for t in tasks if t["status"] == "已完成")
+        mod_avg = round(sum(t.get("progress", 0) or 0 for t in tasks) / max(mod_total, 1))
+        modules_data.append({
+            **m,
+            "total": mod_total,
+            "completed": mod_completed,
+            "in_progress": sum(1 for t in tasks if t["status"] == "进行中"),
+            "pending": sum(1 for t in tasks if t["status"] == "待处理"),
+            "avg_progress": mod_avg,
+            "tasks": tasks,
+        })
+
+    return jsonify({
+        "total": total,
+        "completed": completed,
+        "in_progress": in_progress,
+        "pending": pending,
+        "shelved": shelved,
+        "avg_progress": avg_progress,
+        "modules": modules_data,
+    })
+
+
+@app.route("/api/requirements/batch", methods=["POST"])
+@login_required
+def batch_create_requirements():
+    data = request.get_json(force=True)
+    items = data.get("requirements", [])
+    if not items:
+        return jsonify({"error": "requirements array is empty"}), 400
+
+    conn = get_db()
+    created = []
+    for item in items:
+        title = (item.get("title") or "").strip()
+        content = (item.get("content") or "").strip()
+        if not title:
+            continue
+        category = item.get("category", "other")
+        if category not in VALID_CATEGORIES:
+            category = "other"
+        priority = item.get("priority", "中")
+        if priority not in VALID_PRIORITIES:
+            priority = "中"
+        progress = max(0, min(100, int(item.get("progress", 0) or 0)))
+        status = item.get("status", "待处理")
+        if status not in ("待处理", "进行中", "已完成", "已搁置"):
+            status = "待处理"
+
+        cur = conn.execute(
+            "INSERT INTO requirements (title, content, author, status, category, progress, priority, created_at, ip) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (title, content or title, session.get("user_name", "API"),
+             status, category, progress, priority, now_str(), client_ip()),
+        )
+        created.append({"id": cur.lastrowid, "title": title})
+    conn.commit()
+    conn.close()
+    return jsonify({"created": len(created), "items": created})
+
+
+@app.route("/api/requirements/batch", methods=["PUT"])
+@login_required
+def batch_update_requirements():
+    data = request.get_json(force=True)
+    updates = data.get("updates", [])
+    if not updates:
+        return jsonify({"error": "updates array is empty"}), 400
+
+    conn = get_db()
+    updated = 0
+    for u in updates:
+        rid = u.get("id")
+        if not rid:
+            continue
+        sets, vals = [], []
+        if "status" in u and u["status"] in ("待处理", "进行中", "已完成", "已搁置"):
+            sets.append("status = ?")
+            vals.append(u["status"])
+        if "progress" in u:
+            sets.append("progress = ?")
+            vals.append(max(0, min(100, int(u["progress"]))))
+        if "category" in u and u["category"] in VALID_CATEGORIES:
+            sets.append("category = ?")
+            vals.append(u["category"])
+        if "priority" in u and u["priority"] in VALID_PRIORITIES:
+            sets.append("priority = ?")
+            vals.append(u["priority"])
+        if "title" in u:
+            sets.append("title = ?")
+            vals.append(u["title"].strip())
+        if "content" in u:
+            sets.append("content = ?")
+            vals.append(u["content"].strip())
+        if not sets:
+            continue
+        vals.append(rid)
+        conn.execute(f"UPDATE requirements SET {', '.join(sets)} WHERE id = ?", vals)
+        updated += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"updated": updated})
 
 
 # ---------- REQUESTS ----------

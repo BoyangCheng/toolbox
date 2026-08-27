@@ -36,5 +36,16 @@
     <div class="tool-name">我觉得系统应该是这样的</div>
     <div class="tool-desc">提交和跟踪需求与想法，支持评论、点赞、进度管理</div>
   </a>
+  <a class="tool-card" href="{{ url_for('progress_dashboard') }}">
+    <div class="tool-icon">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="18" fill="#4f46e5" opacity="0.1" stroke="#4f46e5" stroke-width="2"/>
+        <circle cx="24" cy="24" r="12" fill="none" stroke="#4f46e5" stroke-width="4" stroke-dasharray="50 25" stroke-linecap="round"/>
+        <circle cx="24" cy="24" r="4" fill="#4f46e5"/>
+      </svg>
+    </div>
+    <div class="tool-name">项目总进度</div>
+    <div class="tool-desc">各模块实施进度一览，支持批量导入和更新需求</div>
+  </a>
 </div>
 {% endblock %}

@@ -10,6 +10,7 @@
 <nav class="subnav">
   <a href="{{ url_for('new_requirement') }}" class="{% if request.endpoint == 'new_requirement' %}active{% endif %}">提需求</a>
   <a href="{{ url_for('list_requirements') }}" class="{% if request.endpoint == 'list_requirements' %}active{% endif %}">所有需求</a>
+  <a href="{{ url_for('progress_dashboard') }}" class="{% if request.endpoint == 'progress_dashboard' %}active{% endif %}">项目总进度</a>
 </nav>
 {% endblock %}
 {% block content %}

@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% block title %}项目总进度 · 荣信工具箱{% endblock %}
+{% block header_right %}
+  <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
+  {% if session.user_name %}
+    <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% endif %}
+{% endblock %}
+{% block subnav %}
+<nav class="subnav">
+  <a href="{{ url_for('new_requirement') }}">提需求</a>
+  <a href="{{ url_for('list_requirements') }}">所有需求</a>
+  <a href="{{ url_for('progress_dashboard') }}" class="active">项目总进度</a>
+</nav>
+{% endblock %}
+
+{% block head %}
+<style>
+/* ── PROGRESS PAGE ─────────────────────────────────── */
+.pg{max-width:1200px;margin:0 auto;padding:0 20px 40px}
+
+/* hero */
+.pg-hero{display:flex;gap:36px;align-items:center;padding:36px 40px;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#6d28d9 100%);border-radius:20px;color:#fff;margin-bottom:32px;box-shadow:0 8px 32px rgba(79,70,229,.25);flex-wrap:wrap}
+.pg-ring-wrap{flex-shrink:0;position:relative;width:180px;height:180px}
+.pg-ring-wrap svg{transform:rotate(-90deg)}
+.pg-ring-bg{fill:none;stroke:rgba(255,255,255,.15);stroke-width:12}
+.pg-ring-fg{fill:none;stroke:#fff;stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
+.pg-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.pg-ring-pct{font-size:42px;font-weight:800;line-height:1}
+.pg-ring-sub{font-size:12px;opacity:.7;margin-top:4px}
+.pg-hero-meta{flex:1;min-width:220px}
+.pg-hero-title{font-size:28px;font-weight:800;margin:0 0 8px;letter-spacing:.5px}
+.pg-hero-desc{font-size:14px;opacity:.8;margin:0 0 20px}
+.pg-metrics{display:flex;gap:16px;flex-wrap:wrap}
+.pg-metric{background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border-radius:12px;padding:14px 20px;min-width:100px;text-align:center;border:1px solid rgba(255,255,255,.15)}
+.pg-metric-val{font-size:28px;font-weight:700;line-height:1.2}
+.pg-metric-lbl{font-size:11px;opacity:.7;margin-top:2px}
+
+/* toolbar */
+.pg-toolbar{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.pg-toolbar .btn{padding:8px 16px;border-radius:8px;font-size:13px;border:1px solid var(--border);background:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .12s}
+.pg-toolbar .btn:hover{background:#f5f3ff;border-color:#c4b5fd}
+.pg-toolbar .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pg-toolbar .btn.primary:hover{background:var(--primary-hover)}
+
+/* module grid */
+.pg-modules{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.pg-mod{background:#fff;border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
+.pg-mod:hover{box-shadow:0 6px 24px rgba(0,0,0,.08);transform:translateY(-2px)}
+.pg-mod-head{padding:20px 24px;cursor:pointer;display:flex;align-items:center;gap:14px;user-select:none}
+.pg-mod-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.pg-mod-info{flex:1;min-width:0}
+.pg-mod-name{font-size:16px;font-weight:700;color:var(--text)}
+.pg-mod-stats{font-size:12px;color:var(--muted);margin-top:2px}
+.pg-mod-pct{font-size:22px;font-weight:700;flex-shrink:0;min-width:50px;text-align:right}
+.pg-mod-bar{height:6px;background:#f1f5f9;border-radius:3px;margin:0 24px 0 24px;overflow:hidden}
+.pg-mod-bar-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1)}
+.pg-mod-toggle{display:flex;align-items:center;justify-content:center;padding:8px;font-size:11px;color:var(--muted);cursor:pointer;border-top:1px solid #f1f5f9;transition:background .12s}
+.pg-mod-toggle:hover{background:#f9fafb}
+.pg-mod-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.pg-mod.open .pg-mod-body{max-height:2000px}
+.pg-mod.open .pg-mod-toggle .arrow{transform:rotate(180deg)}
+.arrow{transition:transform .3s}
+
+/* task list */
+.pg-tasks{padding:8px 24px 16px}
+.pg-task-section{margin-bottom:12px}
+.pg-task-section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f1f5f9}
+.pg-task{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:4px;transition:background .1s}
+.pg-task:hover{background:#f9fafb}
+.pg-task-priority{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pg-task-priority.高{background:#dc2626}
+.pg-task-priority.中{background:#d97706}
+.pg-task-priority.低{background:#16a34a}
+.pg-task-title{flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg-task-title a{color:inherit;text-decoration:none}
+.pg-task-title a:hover{color:var(--primary);text-decoration:underline}
+.pg-task-bar{width:80px;height:5px;background:#f1f5f9;border-radius:3px;overflow:hidden;flex-shrink:0}
+.pg-task-bar-fill{height:100%;border-radius:3px}
+.pg-task-pct{font-size:12px;font-weight:600;width:36px;text-align:right;flex-shrink:0}
+.pg-task-status{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;flex-shrink:0;white-space:nowrap}
+.pg-task-status.待处理{background:#fef3c7;color:#92400e}
+.pg-task-status.进行中{background:#dbeafe;color:#1e40af}
+.pg-task-status.已完成{background:#dcfce7;color:#166534}
+.pg-task-status.已搁置{background:#f3e8ff;color:#6b21a8}
+.pg-task.done{opacity:.5}
+.pg-task.done .pg-task-title{text-decoration:line-through}
+.pg-empty{text-align:center;color:var(--muted);font-size:13px;padding:24px}
+
+/* batch modal */
+.pg-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:3000;padding:20px}
+.pg-modal-bg.show{display:flex}
+.pg-modal{background:#fff;border-radius:16px;padding:28px 32px;max-width:720px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.pg-modal h3{margin:0 0 6px;font-size:18px;color:var(--text)}
+.pg-modal p{color:var(--muted);font-size:13px;margin:0 0 16px}
+.pg-modal textarea{width:100%;min-height:200px;padding:12px;border:1px solid var(--border);border-radius:8px;font-family:'Menlo','Consolas',monospace;font-size:12px;line-height:1.5;resize:vertical;outline:none}
+.pg-modal textarea:focus{border-color:var(--primary)}
+.pg-modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.pg-modal .btn{padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--border);background:#fff}
+.pg-modal .btn:hover{border-color:#bbb}
+.pg-modal .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pg-modal .btn.primary:hover{background:var(--primary-hover)}
+.pg-modal .hint{font-size:11px;color:var(--muted);margin-top:8px}
+.pg-modal .result{margin-top:12px;padding:10px;border-radius:6px;font-size:12px}
+.pg-modal .result.ok{background:#dcfce7;color:#166534}
+.pg-modal .result.err{background:#fef2f2;color:#991b1b}
+
+/* responsive */
+@media(max-width:640px){
+  .pg-hero{padding:24px 20px;gap:20px}
+  .pg-ring-wrap{width:120px;height:120px}
+  .pg-ring-pct{font-size:28px}
+  .pg-hero-title{font-size:22px}
+  .pg-modules{grid-template-columns:1fr}
+  .pg-metrics{gap:8px}
+  .pg-metric{min-width:70px;padding:10px 12px}
+}
+
+/* loading shimmer */
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:200px 0}}
+.pg-loading{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:400px;animation:shimmer 1.5s infinite;border-radius:12px;height:200px;margin-bottom:20px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pg" id="pg-root">
+  <!-- loading placeholder -->
+  <div class="pg-loading" id="pg-loader"></div>
+</div>
+
+<!-- batch create modal -->
+<div class="pg-modal-bg" id="batch-modal">
+  <div class="pg-modal">
+    <h3>📥 批量导入需求</h3>
+    <p>粘贴 JSON 数组，每个对象需要 title（必填），可选 content、category、priority、status、progress。</p>
+    <textarea id="batch-json" placeholder='[
+  {"title": "实现销售订单流程", "category": "selling", "priority": "高"},
+  {"title": "采购审批工作流", "category": "buying", "progress": 30, "status": "进行中"}
+]'></textarea>
+    <div class="hint">
+      category 可选值：{{ modules | map(attribute='key') | join(', ') }}<br>
+      priority 可选值：高、中、低<br>
+      status 可选值：待处理、进行中、已完成、已搁置
+    </div>
+    <div id="batch-result"></div>
+    <div class="actions">
+      <button class="btn" onclick="closeBatchModal()">取消</button>
+      <button class="btn primary" onclick="submitBatch()">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- batch update modal -->
+<div class="pg-modal-bg" id="update-modal">
+  <div class="pg-modal">
+    <h3>✏️ 批量更新</h3>
+    <p>粘贴 JSON 数组，每个对象需要 id（必填），可选 status、progress、category、priority、title、content。</p>
+    <textarea id="update-json" placeholder='[
+  {"id": 1, "status": "进行中", "progress": 50},
+  {"id": 2, "progress": 100, "status": "已完成"}
+]'></textarea>
+    <div id="update-result"></div>
+    <div class="actions">
+      <button class="btn" onclick="closeUpdateModal()">取消</button>
+      <button class="btn primary" onclick="submitUpdate()">更新</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MODULES = {{ modules | tojson }};
+const MODULE_MAP = {};
+MODULES.forEach(m => MODULE_MAP[m.key] = m);
+
+async function loadProgress() {
+  const root = document.getElementById('pg-root');
+  const loader = document.getElementById('pg-loader');
+  try {
+    const res = await fetch('/api/progress');
+    const data = await res.json();
+    loader.remove();
+    root.innerHTML = renderHero(data) + renderToolbar() + renderModules(data.modules);
+    // animate ring
+    requestAnimationFrame(() => {
+      const fg = document.querySelector('.pg-ring-fg');
+      if (fg) {
+        const pct = data.avg_progress || 0;
+        const circ = 2 * Math.PI * 72;
+        fg.style.strokeDashoffset = circ - (circ * pct / 100);
+      }
+      // animate bars
+      document.querySelectorAll('[data-fill]').forEach(el => {
+        el.style.width = el.dataset.fill + '%';
+      });
+    });
+  } catch (e) {
+    loader.innerHTML = '<p style="text-align:center;color:#dc2626;padding:40px">加载失败: ' + e.message + '</p>';
+  }
+}
+
+function renderHero(d) {
+  const circ = 2 * Math.PI * 72;
+  return `
+  <div class="pg-hero">
+    <div class="pg-ring-wrap">
+      <svg viewBox="0 0 180 180" width="180" height="180">
+        <circle class="pg-ring-bg" cx="90" cy="90" r="72"/>
+        <circle class="pg-ring-fg" cx="90" cy="90" r="72"
+          stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
+      </svg>
+      <div class="pg-ring-label">
+        <span class="pg-ring-pct">${d.avg_progress}%</span>
+        <span class="pg-ring-sub">总体进度</span>
+      </div>
+    </div>
+    <div class="pg-hero-meta">
+      <h2 class="pg-hero-title">项目总进度</h2>
+      <p class="pg-hero-desc">ERPNext 系统各模块实施进度一览</p>
+      <div class="pg-metrics">
+        <div class="pg-metric"><div class="pg-metric-val">${d.total}</div><div class="pg-metric-lbl">总需求</div></div>
+        <div class="pg-metric"><div class="pg-metric-val">${d.completed}</div><div class="pg-metric-lbl">已完成</div></div>
+        <div class="pg-metric"><div class="pg-metric-val">${d.in_progress}</div><div class="pg-metric-lbl">进行中</div></div>
+        <div class="pg-metric"><div class="pg-metric-val">${d.pending}</div><div class="pg-metric-lbl">待处理</div></div>
+        <div class="pg-metric"><div class="pg-metric-val">${d.shelved}</div><div class="pg-metric-lbl">已搁置</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderToolbar() {
+  return `
+  <div class="pg-toolbar">
+    <button class="btn" onclick="openBatchModal()">📥 批量导入</button>
+    <button class="btn" onclick="openUpdateModal()">✏️ 批量更新</button>
+    <button class="btn" onclick="loadProgress()">🔄 刷新</button>
+    <a class="btn" href="/requests/new">+ 新需求</a>
+  </div>`;
+}
+
+function renderModules(mods) {
+  if (!mods.length) return '<div class="pg-empty">暂无模块数据</div>';
+  let html = '<div class="pg-modules">';
+  for (const m of mods) {
+    if (m.total === 0) continue;
+    const current = m.tasks.filter(t => t.status !== '已完成');
+    const done = m.tasks.filter(t => t.status === '已完成');
+    html += `
+    <div class="pg-mod" data-key="${m.key}">
+      <div class="pg-mod-head" onclick="toggleMod(this)">
+        <div class="pg-mod-icon" style="background:${m.color}15;color:${m.color}">${m.icon}</div>
+        <div class="pg-mod-info">
+          <div class="pg-mod-name">${m.name}</div>
+          <div class="pg-mod-stats">${m.completed}/${m.total} 完成 · ${m.in_progress} 进行中 · ${m.pending} 待处理</div>
+        </div>
+        <div class="pg-mod-pct" style="color:${m.color}">${m.avg_progress}%</div>
+      </div>
+      <div class="pg-mod-bar">
+        <div class="pg-mod-bar-fill" style="background:${m.color};width:0" data-fill="${m.avg_progress}"></div>
+      </div>
+      <div class="pg-mod-body">
+        <div class="pg-tasks">
+          ${current.length ? `
+          <div class="pg-task-section">
+            <div class="pg-task-section-title">当前任务 (${current.length})</div>
+            ${current.map(t => renderTask(t, m.color)).join('')}
+          </div>` : ''}
+          ${done.length ? `
+          <div class="pg-task-section">
+            <div class="pg-task-section-title">已完成 (${done.length})</div>
+            ${done.map(t => renderTask(t, m.color, true)).join('')}
+          </div>` : ''}
+          ${!current.length && !done.length ? '<div class="pg-empty">暂无任务</div>' : ''}
+        </div>
+      </div>
+      <div class="pg-mod-toggle" onclick="toggleMod(this.previousElementSibling.previousElementSibling.previousElementSibling)">
+        <span class="arrow">▼</span>&nbsp;展开 ${m.total} 个任务
+      </div>
+    </div>`;
+  }
+  // modules with 0 tasks — show grayed out
+  for (const m of mods) {
+    if (m.total > 0) continue;
+    html += `
+    <div class="pg-mod" style="opacity:.45">
+      <div class="pg-mod-head">
+        <div class="pg-mod-icon" style="background:${m.color}15;color:${m.color}">${m.icon}</div>
+        <div class="pg-mod-info">
+          <div class="pg-mod-name">${m.name}</div>
+          <div class="pg-mod-stats">暂无需求</div>
+        </div>
+        <div class="pg-mod-pct" style="color:${m.color}">—</div>
+      </div>
+      <div class="pg-mod-bar"><div class="pg-mod-bar-fill" style="background:${m.color}"></div></div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderTask(t, color, isDone) {
+  const pct = t.progress || 0;
+  const pri = t.priority || '中';
+  return `
+  <div class="pg-task ${isDone ? 'done' : ''}">
+    <div class="pg-task-priority ${pri}" title="优先级: ${pri}"></div>
+    <div class="pg-task-title"><a href="/requests/${t.id}">#${t.id} ${esc(t.title)}</a></div>
+    <div class="pg-task-bar"><div class="pg-task-bar-fill" style="background:${color};width:${pct}%"></div></div>
+    <div class="pg-task-pct" style="color:${color}">${pct}%</div>
+    <span class="pg-task-status ${t.status}">${t.status}</span>
+  </div>`;
+}
+
+function esc(s) {
+  return (s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+}
+
+function toggleMod(headEl) {
+  const mod = headEl.closest('.pg-mod');
+  mod.classList.toggle('open');
+}
+
+// ── batch modals ──
+function openBatchModal() { document.getElementById('batch-modal').classList.add('show'); }
+function closeBatchModal() { document.getElementById('batch-modal').classList.remove('show'); document.getElementById('batch-result').innerHTML = ''; }
+function openUpdateModal() { document.getElementById('update-modal').classList.add('show'); }
+function closeUpdateModal() { document.getElementById('update-modal').classList.remove('show'); document.getElementById('update-result').innerHTML = ''; }
+
+async function submitBatch() {
+  const el = document.getElementById('batch-json');
+  const resEl = document.getElementById('batch-result');
+  let arr;
+  try { arr = JSON.parse(el.value); } catch(e) { resEl.innerHTML = '<div class="result err">JSON 格式错误: ' + e.message + '</div>'; return; }
+  if (!Array.isArray(arr)) { resEl.innerHTML = '<div class="result err">必须是 JSON 数组 [...]</div>'; return; }
+  try {
+    const res = await fetch('/api/requirements/batch', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({requirements: arr})});
+    const data = await res.json();
+    if (data.error) { resEl.innerHTML = '<div class="result err">' + data.error + '</div>'; return; }
+    resEl.innerHTML = '<div class="result ok">✓ 成功导入 ' + data.created + ' 条需求</div>';
+    setTimeout(() => { closeBatchModal(); loadProgress(); }, 1200);
+  } catch(e) { resEl.innerHTML = '<div class="result err">请求失败: ' + e.message + '</div>'; }
+}
+
+async function submitUpdate() {
+  const el = document.getElementById('update-json');
+  const resEl = document.getElementById('update-result');
+  let arr;
+  try { arr = JSON.parse(el.value); } catch(e) { resEl.innerHTML = '<div class="result err">JSON 格式错误: ' + e.message + '</div>'; return; }
+  if (!Array.isArray(arr)) { resEl.innerHTML = '<div class="result err">必须是 JSON 数组 [...]</div>'; return; }
+  try {
+    const res = await fetch('/api/requirements/batch', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates: arr})});
+    const data = await res.json();
+    if (data.error) { resEl.innerHTML = '<div class="result err">' + data.error + '</div>'; return; }
+    resEl.innerHTML = '<div class="result ok">✓ 成功更新 ' + data.updated + ' 条</div>';
+    setTimeout(() => { closeUpdateModal(); loadProgress(); }, 1200);
+  } catch(e) { resEl.innerHTML = '<div class="result err">请求失败: ' + e.message + '</div>'; }
+}
+
+// init
+loadProgress();
+</script>
+{% endblock %}
