@@ -146,10 +146,53 @@ def log_action(action, ip, detail=""):
     print(f"[{now_str()}] {action} from {ip} {detail}", flush=True)
 
 
+# ---------- API Key ----------
+API_KEY_FILE = os.path.join(DATA_DIR, ".api_key")
+
+
+def _load_or_create_api_key():
+    """Load API key from env var or file; generate if missing."""
+    env_key = os.environ.get("API_SECRET_KEY", "").strip()
+    if env_key:
+        return env_key
+    if os.path.exists(API_KEY_FILE):
+        existing = open(API_KEY_FILE).read().strip()
+        if existing:
+            return existing
+    key = "tk_" + secrets.token_hex(24)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(API_KEY_FILE, "w") as f:
+        f.write(key)
+    print(f"[init] Generated API key: {key}", flush=True)
+    return key
+
+
+API_KEY = _load_or_create_api_key()
+
+
 def login_required(f):
+    """Require login session OR valid API key (X-API-Key header / Bearer token)."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # 1. Check API key
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                api_key = auth_header[7:].strip()
+        if api_key and api_key == API_KEY:
+            # Inject minimal session for downstream code that reads session.user_name
+            if "user_id" not in session:
+                session["user_id"] = 0
+                session["user_name"] = "API"
+                session["user_department"] = "系统"
+            return f(*args, **kwargs)
+
+        # 2. Check session
         if "user_id" not in session:
+            if request.is_json or request.path.startswith("/api/"):
+                return jsonify({"error": "unauthorized",
+                                "hint": "Pass X-API-Key header or login via browser"}), 401
             return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
