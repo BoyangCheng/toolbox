@@ -159,7 +159,7 @@ def login_required(f):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_id" in session:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("progress_dashboard"))
     error = None
     if request.method == "POST":
         phone = (request.form.get("phone") or "").strip()
@@ -173,7 +173,7 @@ def login():
             session["user_name"] = user["name"]
             session["user_department"] = user["department"]
             next_url = request.args.get("next")
-            return redirect(next_url or url_for("dashboard"))
+            return redirect(next_url or url_for("progress_dashboard"))
         error = "手机号或密码不正确"
     return render_template("login.html", error=error)
 
@@ -181,7 +181,7 @@ def login():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if "user_id" in session:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("progress_dashboard"))
     error = None
     form = {}
     if request.method == "POST":
