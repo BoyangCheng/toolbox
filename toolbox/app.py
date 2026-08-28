@@ -714,10 +714,27 @@ def api_progress():
     })
 
 
+# 批量操作口令：浏览器端调用需携带，API Key 直连不需要
+BATCH_PASSWORD = os.environ.get("BATCH_PASSWORD", "1234")
+
+
+def _batch_auth_ok(payload):
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            api_key = auth_header[7:].strip()
+    if api_key and api_key == API_KEY:
+        return True
+    return str(payload.get("password", "")) == BATCH_PASSWORD
+
+
 @app.route("/api/requirements/batch", methods=["POST"])
 @login_required
 def batch_create_requirements():
     data = request.get_json(force=True)
+    if not _batch_auth_ok(data):
+        return jsonify({"error": "forbidden"}), 403
     items = data.get("requirements", [])
     if not items:
         return jsonify({"error": "requirements array is empty"}), 400
@@ -768,6 +785,8 @@ def batch_create_requirements():
 @login_required
 def batch_update_requirements():
     data = request.get_json(force=True)
+    if not _batch_auth_ok(data):
+        return jsonify({"error": "forbidden"}), 403
     updates = data.get("updates", [])
     if not updates:
         return jsonify({"error": "updates array is empty"}), 400

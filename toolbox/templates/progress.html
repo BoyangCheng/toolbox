@@ -17,7 +17,8 @@
 {% block head %}
 <style>
 /* ── PROGRESS PAGE ─────────────────────────────────── */
-.pg{max-width:1200px;margin:0 auto;padding:0 20px 40px}
+main.container{max-width:100%;padding-left:32px;padding-right:32px}
+.pg{max-width:100%;margin:0 auto;padding:0 0 40px}
 
 /* hero */
 .pg-hero{display:flex;gap:36px;align-items:center;padding:36px 40px;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#6d28d9 100%);border-radius:20px;color:#fff;margin-bottom:32px;box-shadow:0 8px 32px rgba(79,70,229,.25);flex-wrap:wrap}
@@ -44,7 +45,7 @@
 .pg-toolbar .btn.primary:hover{background:var(--primary-hover)}
 
 /* module grid */
-.pg-modules{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.pg-modules{display:grid;grid-template-columns:1fr;gap:16px}
 .pg-mod{background:#fff;border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
 .pg-mod:hover{box-shadow:0 6px 24px rgba(0,0,0,.08);transform:translateY(-2px)}
 .pg-mod-head{padding:20px 24px;cursor:pointer;display:flex;align-items:center;gap:14px;user-select:none}
@@ -304,8 +305,7 @@ function renderTask(t, color, isDone) {
   return `
   <div class="pg-task ${isDone ? 'done' : ''}">
     <div class="pg-task-priority ${pri}" title="优先级: ${pri}"></div>
-    <div class="pg-task-title"><a href="/requests/${t.id}">#${t.id} ${esc(t.title)}</a></div>
-    <div class="pg-task-bar"><div class="pg-task-bar-fill" style="background:${color};width:${pct}%"></div></div>
+    <div class="pg-task-title" title="${esc(t.title)}"><a href="/requests/${t.id}">${esc(t.title)}</a></div>
     <div class="pg-task-pct" style="color:${color}">${pct}%</div>
     <span class="pg-task-status ${t.status}">${t.status}</span>
   </div>`;
@@ -332,9 +332,12 @@ async function submitBatch() {
   let arr;
   try { arr = JSON.parse(el.value); } catch(e) { resEl.innerHTML = '<div class="result err">JSON 格式错误: ' + e.message + '</div>'; return; }
   if (!Array.isArray(arr)) { resEl.innerHTML = '<div class="result err">必须是 JSON 数组 [...]</div>'; return; }
+  const pwd = prompt('请输入操作密码');
+  if (pwd === null) return;
   try {
-    const res = await fetch('/api/requirements/batch', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({requirements: arr})});
+    const res = await fetch('/api/requirements/batch', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({requirements: arr, password: pwd})});
     const data = await res.json();
+    if (res.status === 403) { resEl.innerHTML = '<div class="result err">密码错误</div>'; return; }
     if (data.error) { resEl.innerHTML = '<div class="result err">' + data.error + '</div>'; return; }
     resEl.innerHTML = '<div class="result ok">✓ 成功导入 ' + data.created + ' 条需求</div>';
     setTimeout(() => { closeBatchModal(); loadProgress(); }, 1200);
@@ -347,9 +350,12 @@ async function submitUpdate() {
   let arr;
   try { arr = JSON.parse(el.value); } catch(e) { resEl.innerHTML = '<div class="result err">JSON 格式错误: ' + e.message + '</div>'; return; }
   if (!Array.isArray(arr)) { resEl.innerHTML = '<div class="result err">必须是 JSON 数组 [...]</div>'; return; }
+  const pwd = prompt('请输入操作密码');
+  if (pwd === null) return;
   try {
-    const res = await fetch('/api/requirements/batch', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates: arr})});
+    const res = await fetch('/api/requirements/batch', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates: arr, password: pwd})});
     const data = await res.json();
+    if (res.status === 403) { resEl.innerHTML = '<div class="result err">密码错误</div>'; return; }
     if (data.error) { resEl.innerHTML = '<div class="result err">' + data.error + '</div>'; return; }
     resEl.innerHTML = '<div class="result ok">✓ 成功更新 ' + data.updated + ' 条</div>';
     setTimeout(() => { closeUpdateModal(); loadProgress(); }, 1200);

@@ -29,7 +29,7 @@
           <div class="req-main">
             <div class="req-top">
               <a class="req-title" href="{{ url_for('requirement_detail', rid=it.id) }}">
-                #{{ it.id }} {{ it.title }}
+                {{ it.title }}
               </a>
               <span class="status status-{{ it.status }}">{{ it.status }}</span>
             </div>

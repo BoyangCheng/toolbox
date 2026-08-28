@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}#{{ req.id }} {{ req.title }} · 荣信工具箱{% endblock %}
+{% block title %}{{ req.title }} · 荣信工具箱{% endblock %}
 {% block header_right %}
   <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
   {% if session.user_name %}
@@ -18,7 +18,7 @@
   <a class="back" href="{{ url_for('list_requirements') }}">← 返回需求列表</a>
 
   <div class="req-top">
-    <h2 class="req-title">#{{ req.id }} {{ req.title }}</h2>
+    <h2 class="req-title">{{ req.title }}</h2>
     <span class="status status-{{ req.status }}">{{ req.status }}</span>
   </div>
 
