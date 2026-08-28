@@ -578,17 +578,19 @@ def flowchart_upload_delete(file_id):
 
 # ---------- MODULES & PROGRESS ----------
 MODULES = [
-    {"key": "selling", "name": "销售", "icon": "📊", "color": "#4f46e5"},
-    {"key": "buying", "name": "采购", "icon": "🛒", "color": "#0891b2"},
-    {"key": "stock", "name": "库存", "icon": "📦", "color": "#059669"},
-    {"key": "manufacturing", "name": "制造", "icon": "🏭", "color": "#d97706"},
-    {"key": "hr", "name": "人力资源", "icon": "👥", "color": "#dc2626"},
-    {"key": "accounting", "name": "会计", "icon": "💰", "color": "#7c3aed"},
-    {"key": "projects", "name": "项目管理", "icon": "📋", "color": "#2563eb"},
-    {"key": "crm", "name": "CRM", "icon": "🤝", "color": "#db2777"},
-    {"key": "asset", "name": "资产管理", "icon": "🏢", "color": "#65a30d"},
+    {"key": "framework", "name": "基础框架", "icon": "🏗️", "color": "#475569"},
     {"key": "cost", "name": "成本", "icon": "💲", "color": "#ea580c"},
-    {"key": "other", "name": "其他", "icon": "📌", "color": "#6b7280"},
+    {"key": "ai", "name": "AI", "icon": "🤖", "color": "#8b5cf6"},
+    {"key": "accounting", "name": "会计", "icon": "💰", "color": "#eab308"},
+    {"key": "asset", "name": "资产", "icon": "🏢", "color": "#65a30d"},
+    {"key": "buying", "name": "采购", "icon": "🛒", "color": "#0891b2"},
+    {"key": "crm", "name": "客户关系", "icon": "🤝", "color": "#db2777"},
+    {"key": "manufacturing", "name": "生产", "icon": "🏭", "color": "#d97706"},
+    {"key": "projects", "name": "项目", "icon": "📋", "color": "#2563eb"},
+    {"key": "quality", "name": "质量（品管）", "icon": "✅", "color": "#16a34a"},
+    {"key": "selling", "name": "销售", "icon": "📊", "color": "#4f46e5"},
+    {"key": "stock", "name": "库存", "icon": "📦", "color": "#059669"},
+    {"key": "subcontracting", "name": "委外", "icon": "📤", "color": "#14b8a6"},
 ]
 MODULE_MAP = {m["key"]: m for m in MODULES}
 VALID_CATEGORIES = [m["key"] for m in MODULES]
@@ -620,21 +622,30 @@ def api_progress():
     shelved = sum(1 for t in all_tasks if t["status"] == "已搁置")
     avg_progress = round(sum(t.get("progress", 0) or 0 for t in all_tasks) / max(total, 1))
 
-    modules_data = []
-    for m in MODULES:
-        tasks = [t for t in all_tasks if (t.get("category") or "other") == m["key"]]
+    def _bucket(meta, tasks):
         mod_total = len(tasks)
-        mod_completed = sum(1 for t in tasks if t["status"] == "已完成")
-        mod_avg = round(sum(t.get("progress", 0) or 0 for t in tasks) / max(mod_total, 1))
-        modules_data.append({
-            **m,
+        return {
+            **meta,
             "total": mod_total,
-            "completed": mod_completed,
+            "completed": sum(1 for t in tasks if t["status"] == "已完成"),
             "in_progress": sum(1 for t in tasks if t["status"] == "进行中"),
             "pending": sum(1 for t in tasks if t["status"] == "待处理"),
-            "avg_progress": mod_avg,
+            "avg_progress": round(sum(t.get("progress", 0) or 0 for t in tasks) / max(mod_total, 1)),
             "tasks": tasks,
-        })
+        }
+
+    modules_data = [
+        _bucket(m, [t for t in all_tasks if (t.get("category") or "") == m["key"]])
+        for m in MODULES
+    ]
+    # 老数据 / 无效分类兜底：不属于任何模块的进"未分类"桶（仅在有内容时显示）
+    valid_keys = set(VALID_CATEGORIES)
+    orphans = [t for t in all_tasks if (t.get("category") or "") not in valid_keys]
+    if orphans:
+        modules_data.append(_bucket(
+            {"key": "uncategorized", "name": "未分类", "icon": "📌", "color": "#6b7280"},
+            orphans,
+        ))
 
     return jsonify({
         "total": total,
@@ -662,9 +673,9 @@ def batch_create_requirements():
         content = (item.get("content") or "").strip()
         if not title:
             continue
-        category = item.get("category", "other")
+        category = item.get("category", "uncategorized")
         if category not in VALID_CATEGORIES:
-            category = "other"
+            category = "uncategorized"
         priority = item.get("priority", "中")
         if priority not in VALID_PRIORITIES:
             priority = "中"
