@@ -241,7 +241,7 @@ function renderModules(mods) {
   if (!mods.length) return '<div class="pg-empty">暂无模块数据</div>';
   let html = '<div class="pg-modules">';
   for (const m of mods) {
-    if (m.total === 0) continue;
+    if (m.total === 0 && !m.override) continue;
     const current = m.tasks.filter(t => t.status !== '已完成');
     const done = m.tasks.filter(t => t.status === '已完成');
     html += `
@@ -272,14 +272,15 @@ function renderModules(mods) {
           ${!current.length && !done.length ? '<div class="pg-empty">暂无任务</div>' : ''}
         </div>
       </div>
+      ${m.total > 0 ? `
       <div class="pg-mod-toggle" onclick="toggleMod(this.previousElementSibling.previousElementSibling.previousElementSibling)">
         <span class="arrow">▼</span>&nbsp;展开 ${m.total} 个任务
-      </div>
+      </div>` : '<div style="height:16px"></div>'}
     </div>`;
   }
-  // modules with 0 tasks — show grayed out
+  // modules with 0 tasks and no override — show grayed out
   for (const m of mods) {
-    if (m.total > 0) continue;
+    if (m.total > 0 || m.override) continue;
     html += `
     <div class="pg-mod" style="opacity:.45">
       <div class="pg-mod-head">

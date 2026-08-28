@@ -586,7 +586,6 @@ MODULES = [
     {"key": "buying", "name": "采购", "icon": "🛒", "color": "#0891b2"},
     {"key": "crm", "name": "客户关系", "icon": "🤝", "color": "#db2777"},
     {"key": "manufacturing", "name": "生产", "icon": "🏭", "color": "#d97706"},
-    {"key": "projects", "name": "项目", "icon": "📋", "color": "#2563eb"},
     {"key": "quality", "name": "质量（品管）", "icon": "✅", "color": "#16a34a"},
     {"key": "selling", "name": "销售", "icon": "📊", "color": "#4f46e5"},
     {"key": "stock", "name": "库存", "icon": "📦", "color": "#059669"},
@@ -595,6 +594,59 @@ MODULES = [
 MODULE_MAP = {m["key"]: m for m in MODULES}
 VALID_CATEGORIES = [m["key"] for m in MODULES]
 VALID_PRIORITIES = ["高", "中", "低"]
+
+# 模块进度覆盖值：{"overall": 63, "framework": 100, ...}
+# 有覆盖值时显示覆盖值；没有时按任务 progress 平均计算
+MODULE_PROGRESS_FILE = os.path.join(DATA_DIR, "module_progress.json")
+
+
+def _load_module_progress():
+    if not os.path.exists(MODULE_PROGRESS_FILE):
+        return {}
+    try:
+        with open(MODULE_PROGRESS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+def _save_module_progress(data):
+    tmp = MODULE_PROGRESS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, MODULE_PROGRESS_FILE)
+
+
+@app.route("/api/modules/progress", methods=["GET", "POST"])
+@login_required
+def api_module_progress():
+    """GET 返回覆盖值；POST 批量设置。
+    POST body: {"overall": 63, "framework": 100, "cost": 23, ...}
+    值为 null 表示清除该覆盖（恢复按任务自动计算）。"""
+    if request.method == "GET":
+        return jsonify(_load_module_progress())
+
+    data = request.get_json(force=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "body must be a JSON object"}), 400
+    overrides = _load_module_progress()
+    valid_keys = set(VALID_CATEGORIES) | {"overall"}
+    applied, ignored = [], []
+    for k, v in data.items():
+        if k not in valid_keys:
+            ignored.append(k)
+            continue
+        if v is None:
+            overrides.pop(k, None)
+        else:
+            try:
+                overrides[k] = max(0, min(100, int(v)))
+            except (TypeError, ValueError):
+                ignored.append(k)
+                continue
+        applied.append(k)
+    _save_module_progress(overrides)
+    return jsonify({"applied": applied, "ignored": ignored, "current": overrides})
 
 
 @app.route("/progress")
@@ -634,10 +686,14 @@ def api_progress():
             "tasks": tasks,
         }
 
-    modules_data = [
-        _bucket(m, [t for t in all_tasks if (t.get("category") or "") == m["key"]])
-        for m in MODULES
-    ]
+    overrides = _load_module_progress()
+    modules_data = []
+    for m in MODULES:
+        b = _bucket(m, [t for t in all_tasks if (t.get("category") or "") == m["key"]])
+        if m["key"] in overrides:
+            b["avg_progress"] = overrides[m["key"]]
+            b["override"] = True
+        modules_data.append(b)
     # 老数据 / 无效分类兜底：不属于任何模块的进"未分类"桶（仅在有内容时显示）
     valid_keys = set(VALID_CATEGORIES)
     orphans = [t for t in all_tasks if (t.get("category") or "") not in valid_keys]
@@ -653,7 +709,7 @@ def api_progress():
         "in_progress": in_progress,
         "pending": pending,
         "shelved": shelved,
-        "avg_progress": avg_progress,
+        "avg_progress": overrides.get("overall", avg_progress),
         "modules": modules_data,
     })
 
