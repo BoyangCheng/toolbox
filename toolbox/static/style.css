@@ -482,11 +482,48 @@ body {
 
 /* ── RESPONSIVE ── */
 @media (max-width: 640px) {
-  .site-header { padding: 0 20px; }
-  .header-inner { height: 56px; }
+  .site-header { padding: 0 14px; }
+  .header-inner { height: 52px; gap: 8px; }
+  .site-header h1 { font-size: 17px; }
   .user-info { display: none; }
-  .req-item { flex-direction: column; }
+  .btn-logout { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+
+  /* subnav 横向滚动，不换行不挤压 */
+  .subnav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 10px;
+  }
+  .subnav::-webkit-scrollbar { display: none; }
+  .subnav a { flex-shrink: 0; font-size: 13px; }
+
+  .container { padding: 16px 12px; }
+  .card { padding: 18px 14px; border-radius: 12px; }
+
+  .req-item { flex-direction: column; gap: 10px; }
   .req-aside { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
-  .tool-grid { grid-template-columns: 1fr; }
+  .req-title { font-size: 15px; }
+  .req-content { font-size: 13px; }
+  .req-meta { flex-wrap: wrap; gap: 8px; font-size: 11px; }
+
+  .list-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .list-header .btn { width: 100%; text-align: center; }
+
+  .detail-actions { flex-direction: column; align-items: stretch; gap: 12px; }
+  .status-form { flex-wrap: wrap; }
+  .status-form select { flex: 1; }
+
+  .form input[type="text"], .form textarea { font-size: 16px; } /* 防 iOS 聚焦放大 */
+  .actions { flex-direction: column; }
+  .actions .btn { width: 100%; text-align: center; }
+
+  .tool-grid { grid-template-columns: 1fr; gap: 14px; }
   .auth-card { padding: 28px 20px; }
+
+  .dashboard-welcome h2 { font-size: 20px; }
+  .comments { padding-left: 0; }
+  .req-image { max-width: 100%; }
 }

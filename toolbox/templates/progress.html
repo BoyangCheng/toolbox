@@ -45,7 +45,8 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-toolbar .btn.primary:hover{background:var(--primary-hover)}
 
 /* module grid */
-.pg-modules{display:grid;grid-template-columns:1fr;gap:16px}
+.pg-modules{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:900px){.pg-modules{grid-template-columns:1fr}}
 .pg-mod{background:#fff;border-radius:16px;border:1px solid var(--border);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
 .pg-mod:hover{box-shadow:0 6px 24px rgba(0,0,0,.08);transform:translateY(-2px)}
 .pg-mod-head{padding:20px 24px;cursor:pointer;display:flex;align-items:center;gap:14px;user-select:none}
@@ -108,13 +109,27 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 
 /* responsive */
 @media(max-width:640px){
-  .pg-hero{padding:24px 20px;gap:20px}
-  .pg-ring-wrap{width:120px;height:120px}
-  .pg-ring-pct{font-size:28px}
-  .pg-hero-title{font-size:22px}
-  .pg-modules{grid-template-columns:1fr}
-  .pg-metrics{gap:8px}
-  .pg-metric{min-width:70px;padding:10px 12px}
+  main.container{padding-left:12px;padding-right:12px}
+  .pg-hero{padding:20px 16px;gap:16px;justify-content:center;text-align:center;border-radius:14px}
+  .pg-ring-wrap{width:110px;height:110px}
+  .pg-ring-wrap svg{width:110px;height:110px}
+  .pg-ring-pct{font-size:26px}
+  .pg-hero-title{font-size:20px}
+  .pg-hero-desc{font-size:12px;margin-bottom:12px}
+  .pg-metrics{gap:6px;justify-content:center}
+  .pg-metric{min-width:62px;padding:8px 10px}
+  .pg-metric-val{font-size:20px}
+  .pg-mod-head{padding:14px 14px;gap:10px}
+  .pg-mod-icon{width:38px;height:38px;font-size:19px}
+  .pg-mod-name{font-size:14px}
+  .pg-mod-pct{font-size:18px}
+  .pg-mod-bar{margin:0 14px}
+  .pg-tasks{padding:8px 10px 12px}
+  .pg-task{padding:8px 6px;gap:8px}
+  .pg-task-title{font-size:12px}
+  .pg-task-status{font-size:9px;padding:2px 6px}
+  .pg-toolbar .btn{padding:7px 12px;font-size:12px}
+  .pg-modal{padding:20px 16px}
 }
 
 /* loading shimmer */

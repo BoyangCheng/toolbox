@@ -2,6 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>流程图编辑器 · 荣信工具箱</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -22,7 +23,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 .tbtn.green{color:#1e8e3e}.tbtn.green:hover{background:#e6f4ea;border-color:#1e8e3e}
 .tbtn.red{color:#c62828}.tbtn.red:hover{background:#fce8e6;border-color:#c62828}
 #main{flex:1;overflow:hidden;position:relative}
-#cc{position:absolute;inset:0;overflow:hidden;background:#fafafa;cursor:default}
+#cc{position:absolute;inset:0;overflow:hidden;background:#fafafa;cursor:default;touch-action:none}
 #svg{position:absolute;top:0;left:0;width:100%;height:100%}
 .node-shape{fill:#fff;stroke:#555;stroke-width:1.5;cursor:move}
 .node-shape.sel{stroke:#4285f4;stroke-width:2}
@@ -73,6 +74,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
 .modal .btn.danger:hover{background:#fef2f2}
 #copy-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;z-index:4000;opacity:0;transition:opacity .2s;pointer-events:none}
 #copy-toast.show{opacity:1}
+/* ── 手机端 ── */
+@media(max-width:768px){
+  #topbar{padding:0 10px;gap:8px;height:40px}
+  #topbar .tb-title{font-size:13px}
+  #topbar .tb-user{display:none}
+  #presence{max-width:140px;font-size:11px}
+  #toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 8px;height:46px}
+  #toolbar::-webkit-scrollbar{display:none}
+  .tbtn{flex-shrink:0;padding:5px 8px;font-size:11px}
+  .sep{flex-shrink:0}
+  #hint{display:none}
+  #zoom-badge{bottom:8px;right:8px;font-size:11px}
+  .modal{padding:20px 16px;max-width:94vw}
+  #versions-modal .modal{width:94vw;padding:16px 12px}
+  #details-modal .modal{width:94vw;padding:16px 14px}
+}
 #versions-modal .modal{max-width:720px;width:90vw;max-height:80vh;display:flex;flex-direction:column;padding:24px 28px}
 #versions-modal h3{margin-bottom:6px}
 #versions-modal .vlist-wrap{flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;margin:12px 0}
@@ -1620,6 +1637,55 @@ colorPicker.addEventListener('input',()=>{
   }
   render();
 });
+
+// ── TOUCH SUPPORT (手机/平板) ─────────────────────────────
+(function(){
+  let pinch=null,lastTap={t:0,x:0,y:0};
+  function sim(type,pt,target){
+    const ev=new MouseEvent(type,{bubbles:true,cancelable:true,
+      clientX:pt.clientX,clientY:pt.clientY,button:0});
+    (target||pt.target||document).dispatchEvent(ev);
+  }
+  cc.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){
+      const [a,b]=e.touches;
+      pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),zoom:S.zoom,
+             cx:(a.clientX+b.clientX)/2,cy:(a.clientY+b.clientY)/2};
+      e.preventDefault();return;
+    }
+    const t=e.touches[0];
+    // 双击检测（编辑标签）
+    const now=Date.now();
+    if(now-lastTap.t<350&&Math.hypot(t.clientX-lastTap.x,t.clientY-lastTap.y)<30){
+      sim('dblclick',t);
+      lastTap={t:0,x:0,y:0};
+      e.preventDefault();return;
+    }
+    lastTap={t:now,x:t.clientX,y:t.clientY};
+    sim('mousedown',t);
+    e.preventDefault();
+  },{passive:false});
+  document.addEventListener('touchmove',e=>{
+    if(pinch&&e.touches.length===2){
+      const [a,b]=e.touches;
+      const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      const nz=Math.max(.08,Math.min(5,pinch.zoom*d/pinch.d));
+      const r=cc.getBoundingClientRect();
+      const mx=pinch.cx-r.left,my=pinch.cy-r.top;
+      S.pan.x=mx-(mx-S.pan.x)*(nz/S.zoom);
+      S.pan.y=my-(my-S.pan.y)*(nz/S.zoom);
+      S.zoom=nz;applyTx();
+      e.preventDefault();return;
+    }
+    const t=e.touches[0];
+    if(t){sim('mousemove',t,document);e.preventDefault();}
+  },{passive:false});
+  document.addEventListener('touchend',e=>{
+    if(pinch){if(e.touches.length<2)pinch=null;return;}
+    const t=e.changedTouches[0];
+    if(t)sim('mouseup',t,document);
+  });
+})();
 
 // ── DEMO ──────────────────────────────────────────────────
 function initDemo(){
