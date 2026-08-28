@@ -740,11 +740,23 @@ def batch_create_requirements():
         if status not in ("待处理", "进行中", "已完成", "已搁置"):
             status = "待处理"
 
+        created_at = now_str()
+        raw_date = (item.get("created_at") or "").strip()
+        if raw_date:
+            try:
+                if len(raw_date) == 10:
+                    datetime.strptime(raw_date, "%Y-%m-%d")
+                    created_at = raw_date + " 00:00:00"
+                else:
+                    datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+                    created_at = raw_date
+            except ValueError:
+                pass  # 非法日期就用当前时间
         cur = conn.execute(
             "INSERT INTO requirements (title, content, author, status, category, progress, priority, created_at, ip) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (title, content or title, session.get("user_name", "API"),
-             status, category, progress, priority, now_str(), client_ip()),
+             status, category, progress, priority, created_at, client_ip()),
         )
         created.append({"id": cur.lastrowid, "title": title})
     conn.commit()
