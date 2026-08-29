@@ -269,7 +269,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
     </svg>
   </div>
   <div id="zoom-badge">100%</div>
-  <div id="hint">提示：拖拽节点边缘连线点连接节点 · 双击编辑标签 · 选中2+节点后「合并成组」 · Ctrl/Cmd+Z 撤回 · Ctrl/Cmd+Shift+Z 重做</div>
+  <div id="hint">提示：单击节点看详情 · 右键菜单编辑标签 · 拖节点边缘连线点连线 · 选中2+节点后「合并成组」 · Ctrl/Cmd+Z 撤回 · Ctrl/Cmd+Shift+Z 重做</div>
 </div>
 <div id="ctx">
   <div class="citem" id="ctx-edit" onclick="ctxEdit()">✏️ 编辑标签</div>
@@ -534,7 +534,6 @@ function renderNodes(){
     rh.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();startResizeNode(e,n.id);});
     wrap.appendChild(rh);
     wrap.addEventListener('mousedown',e=>{if(!e.target.classList.contains('cp')&&!e.target.classList.contains('rh'))onNodeDown(e,n.id);});
-    wrap.addEventListener('dblclick',e=>{e.stopPropagation();editLabel(n.id,'node');});
     wrap.addEventListener('contextmenu',e=>showCtx(e,n.id));
     nl.appendChild(wrap);
   }
@@ -783,7 +782,11 @@ function onNodeDown(e,id){
   if(S.tool==='add'||S.tool==='sel')setTool('pan');
   render();
   const preSnap=snapState();
-  startDragNodes(e,preSnap);
+  // 单击（按下后没拖动）＝ 打开详情；拖动＝移动节点
+  const sx=e.clientX,sy=e.clientY,shift=e.shiftKey;
+  startDragNodes(e,preSnap,(upX,upY)=>{
+    if(!shift&&Math.hypot(upX-sx,upY-sy)<6)openDetailsModal(id);
+  });
 }
 function onGrpDown(e,gid){
   if(e.button!==0)return;
@@ -827,7 +830,7 @@ function onGrpDown(e,gid){
   };
   document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
 }
-function startDragNodes(e,preSnap){
+function startDragNodes(e,preSnap,onUp){
   const p0=svgPt(e.clientX,e.clientY);
   const orig={};
   S.sel.forEach(id=>{
@@ -844,7 +847,7 @@ function startDragNodes(e,preSnap){
     parents.forEach(pid=>updateGrpBounds(pid));
     render();
   };
-  const mu=()=>{
+  const mu=e2=>{
     document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
     // commit drag to history only if state actually changed
     if(preSnap && snapState()!==preSnap){
@@ -853,6 +856,7 @@ function startDragNodes(e,preSnap){
       _future.length=0;
       updateUndoUI();
     }
+    if(onUp)onUp(e2.clientX,e2.clientY);
   };
   document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
 }
