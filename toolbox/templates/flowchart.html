@@ -134,7 +134,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:1
   <span class="tb-title">流程图编辑器</span>
   <div id="presence"><span class="dot"></span><span id="presence-text"></span></div>
   <div class="tb-spacer"></div>
+  {% if session.user_name %}
   <span class="tb-user">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% else %}
+  <a href="{{ url_for('login', next='/flowchart') }}" style="color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:3px 12px;border-radius:6px;font-size:13px">未登录 · 修改不保存，点此登录</a>
+  {% endif %}
 </div>
 <div id="conflict-modal" class="modal-bg">
   <div class="modal">
@@ -292,7 +296,15 @@ const S = {
 };
 let uid=1;
 const nid=p=>p+(uid++);
-const MY_NAME={{ session.user_name|tojson }};
+const MY_NAME={{ session.user_name|default('游客')|tojson }};
+const LOGGED_IN={{ 'true' if session.get('user_id') is not none else 'false' }};
+let _loginHintShown=false;
+function loginHint(){
+  if(_loginHintShown)return;
+  _loginHintShown=true;
+  showToast('当前未登录，修改不会保存 — 点右上角登录');
+  setTimeout(()=>{_loginHintShown=false;},30000);   // 每30秒最多提醒一次
+}
 const BACKUP_KEY='flowchart_backup_v1';
 let _clipboard=null;
 let _conflictOpen=false;
@@ -1064,6 +1076,7 @@ function renderAttachments(){
   }).join('');
 }
 async function uploadAttachment(file){
+  if(!LOGGED_IN){loginHint();return;}
   if(!_detailsNodeId||!file)return;
   const fd=new FormData();fd.append('file',file);
   showToast('上传中...');
@@ -1081,6 +1094,7 @@ async function uploadAttachment(file){
   }catch(e){showToast('上传失败：'+e.message);}
 }
 async function deleteAttachment(attId){
+  if(!LOGGED_IN){loginHint();return;}
   if(!_detailsNodeId)return;
   if(!confirm('确认删除这个附件？文件会从服务器物理删除。'))return;
   try{
@@ -1302,6 +1316,7 @@ function writeBackup(){
 function clearBackup(){try{localStorage.removeItem(BACKUP_KEY);}catch(e){}}
 
 async function saveState(force){
+  if(!LOGGED_IN)return;
   if(_conflictOpen&&!force)return;
   if(_saving){_pendingSave=true;return;}
   _saving=true;
@@ -1325,6 +1340,7 @@ async function saveState(force){
   if(_pendingSave){_pendingSave=false;scheduleSave();}
 }
 function scheduleSave(){
+  if(!LOGGED_IN){loginHint();return;}
   if(_conflictOpen)return;
   clearTimeout(_saveTimer);
   _saveTimer=setTimeout(saveState,400);
@@ -1334,6 +1350,7 @@ render=function(){_origRender();_lastEditTime=Date.now();_hasUnversionedChanges=
 
 // ── VERSION SNAPSHOT TRIGGERS ─────────────────────────────
 async function saveVersion(trigger){
+  if(!LOGGED_IN)return;
   if(!_hasUnversionedChanges)return;
   try{
     const res=await fetch('/flowchart/api/version',{
@@ -1370,6 +1387,7 @@ setInterval(checkVersionTriggers,VER_CHECK_MS);
 
 // Page close / navigate / logout — fire-and-forget snapshot via sendBeacon
 window.addEventListener('beforeunload',()=>{
+  if(!LOGGED_IN)return;
   if(!_hasUnversionedChanges)return;
   try{
     const blob=new Blob([JSON.stringify({trigger:'unload'})],{type:'application/json'});
@@ -1441,6 +1459,7 @@ async function refreshVersionsList(){
   }
 }
 async function manualSnapshot(){
+  if(!LOGGED_IN){loginHint();return;}
   // Force snapshot regardless of dirty flag (server still dedupes by hash)
   _hasUnversionedChanges=true;
   await saveVersion('manual');
@@ -1464,6 +1483,7 @@ async function viewVersion(n){
   }catch(e){showToast('加载失败');}
 }
 async function restoreVersion(n){
+  if(!LOGGED_IN){loginHint();return;}
   if(!confirm(`恢复到版本 v${n}？\n\n当前状态会先被自动归档为一个版本（可再恢复回来）。`))return;
   try{
     const res=await fetch(`/flowchart/api/versions/${n}/restore`,{method:'POST'});
@@ -1552,6 +1572,7 @@ async function forceOverwrite(){
 
 // ── PRESENCE ──────────────────────────────────────────────
 async function heartbeat(){
+  if(!LOGGED_IN)return;
   try{
     const res=await fetch('/flowchart/api/presence',{method:'POST'});
     if(!res.ok)return;

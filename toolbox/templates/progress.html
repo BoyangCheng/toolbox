@@ -4,6 +4,8 @@
   <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
   {% if session.user_name %}
     <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% else %}
+    <a href="{{ url_for('login', next=request.path) }}" class="btn-logout">登录</a>
   {% endif %}
 {% endblock %}
 {% block subnav %}
@@ -85,8 +87,7 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-task-status.进行中{background:#dbeafe;color:#1e40af}
 .pg-task-status.已完成{background:#dcfce7;color:#166534}
 .pg-task-status.已搁置{background:#f3e8ff;color:#6b21a8}
-.pg-task.done{opacity:.5}
-.pg-task.done .pg-task-title{text-decoration:line-through}
+.pg-task.done{opacity:.72}
 .pg-empty{text-align:center;color:var(--muted);font-size:14px;padding:24px}
 
 /* batch modal */

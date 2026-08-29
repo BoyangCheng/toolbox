@@ -4,6 +4,8 @@
   <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
   {% if session.user_name %}
     <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% else %}
+    <a href="{{ url_for('login', next=request.path) }}" class="btn-logout">登录</a>
   {% endif %}
 {% endblock %}
 {% block subnav %}
@@ -38,6 +40,7 @@
       👍 <span class="like-count">{{ req.likes }}</span>
     </button>
 
+    {% if session.user_name %}
     <form class="status-form" method="post" action="{{ url_for('update_status', rid=req.id) }}">
       <label>更新进度:</label>
       <select name="status">
@@ -47,6 +50,7 @@
       </select>
       <button class="btn" type="submit">保存</button>
     </form>
+    {% endif %}
   </div>
 </section>
 
@@ -73,6 +77,7 @@
     <p class="empty">还没有人评论，来抢沙发吧。</p>
   {% endif %}
 
+  {% if session.user_name %}
   <div class="comment-as">
     以 <b>{{ session.user_name }}</b> 的身份发表评论
   </div>
@@ -85,6 +90,11 @@
       <button class="btn primary" type="submit">发表评论</button>
     </div>
   </form>
+  {% else %}
+  <div class="comment-as">
+    <a href="{{ url_for('login', next=request.path) }}" style="color:var(--primary)">登录</a> 后可发表评论
+  </div>
+  {% endif %}
 </section>
 
 <script>
@@ -94,6 +104,10 @@ document.querySelectorAll('.like-btn').forEach(btn => {
     btn.disabled = true;
     try {
       const res = await fetch(`/requests/${id}/like`, { method: 'POST' });
+      if (res.status === 401 || res.redirected) {
+        window.location = '/login?next=' + encodeURIComponent(location.pathname);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         btn.querySelector('.like-count').textContent = data.likes;

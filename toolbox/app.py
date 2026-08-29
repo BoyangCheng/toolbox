@@ -170,31 +170,37 @@ def _load_or_create_api_key():
 API_KEY = _load_or_create_api_key()
 
 
+def _request_authed():
+    """已登录 session 或有效 API key 均算已认证；API key 会注入伪 session。"""
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            api_key = auth_header[7:].strip()
+    if api_key and api_key == API_KEY:
+        if "user_id" not in session:
+            session["user_id"] = 0
+            session["user_name"] = "API"
+            session["user_department"] = "系统"
+        return True
+    return "user_id" in session
+
+
+def _auth_reject():
+    """未认证时的标准响应：API 路径回 401 JSON，页面跳登录。"""
+    if request.is_json or request.path.startswith("/api/") or "/api/" in request.path:
+        return jsonify({"error": "unauthorized",
+                        "hint": "login required (or pass X-API-Key)"}), 401
+    return redirect(url_for("login", next=request.path))
+
+
 def login_required(f):
-    """Require login session OR valid API key (X-API-Key header / Bearer token)."""
+    """写操作装饰器：要求登录 session 或 API key。只读页面/接口不再使用。"""
     @wraps(f)
     def decorated(*args, **kwargs):
-        # 1. Check API key
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key:
-            auth_header = request.headers.get("Authorization", "")
-            if auth_header.startswith("Bearer "):
-                api_key = auth_header[7:].strip()
-        if api_key and api_key == API_KEY:
-            # Inject minimal session for downstream code that reads session.user_name
-            if "user_id" not in session:
-                session["user_id"] = 0
-                session["user_name"] = "API"
-                session["user_department"] = "系统"
+        if _request_authed():
             return f(*args, **kwargs)
-
-        # 2. Check session
-        if "user_id" not in session:
-            if request.is_json or request.path.startswith("/api/"):
-                return jsonify({"error": "unauthorized",
-                                "hint": "Pass X-API-Key header or login via browser"}), 401
-            return redirect(url_for("login", next=request.path))
-        return f(*args, **kwargs)
+        return _auth_reject()
     return decorated
 
 
@@ -260,14 +266,12 @@ def logout():
 
 # ---------- DASHBOARD ----------
 @app.route("/")
-@login_required
 def dashboard():
     return render_template("dashboard.html")
 
 
 # ---------- FLOWCHART ----------
 @app.route("/flowchart")
-@login_required
 def flowchart():
     return render_template("flowchart.html")
 
@@ -418,13 +422,16 @@ def _prune_old_versions():
 
 
 @app.route("/flowchart/api/state", methods=["GET", "POST"])
-@login_required
 def flowchart_state():
     if request.method == "GET":
         data = _load_flowchart_state()
         if "_version" not in data:
             data["_version"] = 0
         return jsonify(data)
+
+    # 写状态需要登录
+    if not _request_authed():
+        return jsonify({"error": "unauthorized", "hint": "login required"}), 401
 
     try:
         payload = request.get_json(force=True)
@@ -493,14 +500,12 @@ def flowchart_save_version():
 
 
 @app.route("/flowchart/api/versions", methods=["GET"])
-@login_required
 def flowchart_list_versions():
     idx = _load_versions_index()
     return jsonify({"versions": idx.get("versions", [])})
 
 
 @app.route("/flowchart/api/versions/<int:n>", methods=["GET"])
-@login_required
 def flowchart_get_version(n):
     fp = os.path.join(VERSIONS_DIR, f"v{n}.json")
     if not os.path.exists(fp):
@@ -618,13 +623,15 @@ def _save_module_progress(data):
 
 
 @app.route("/api/modules/progress", methods=["GET", "POST"])
-@login_required
 def api_module_progress():
     """GET 返回覆盖值；POST 批量设置。
     POST body: {"overall": 63, "framework": 100, "cost": 23, ...}
     值为 null 表示清除该覆盖（恢复按任务自动计算）。"""
     if request.method == "GET":
         return jsonify(_load_module_progress())
+
+    if not _request_authed():
+        return jsonify({"error": "unauthorized", "hint": "login required"}), 401
 
     data = request.get_json(force=True)
     if not isinstance(data, dict):
@@ -650,13 +657,11 @@ def api_module_progress():
 
 
 @app.route("/progress")
-@login_required
 def progress_dashboard():
     return render_template("progress.html", modules=MODULES)
 
 
 @app.route("/api/progress")
-@login_required
 def api_progress():
     conn = get_db()
     rows = conn.execute(
@@ -828,7 +833,6 @@ def batch_update_requirements():
 
 # ---------- REQUESTS ----------
 @app.route("/requests")
-@login_required
 def list_requirements():
     conn = get_db()
     rows = conn.execute(
@@ -887,7 +891,6 @@ def submit():
 
 
 @app.route("/requests/<int:rid>")
-@login_required
 def requirement_detail(rid):
     conn = get_db()
     req = conn.execute("SELECT * FROM requirements WHERE id = ?", (rid,)).fetchone()

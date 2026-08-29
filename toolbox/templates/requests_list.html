@@ -4,6 +4,8 @@
   <a href="{{ url_for('dashboard') }}" class="btn-logout">← 工具箱首页</a>
   {% if session.user_name %}
     <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% else %}
+    <a href="{{ url_for('login', next=request.path) }}" class="btn-logout">登录</a>
   {% endif %}
 {% endblock %}
 {% block subnav %}
@@ -62,6 +64,10 @@ document.querySelectorAll('.like-btn').forEach(btn => {
     btn.disabled = true;
     try {
       const res = await fetch(`/requests/${id}/like`, { method: 'POST' });
+      if (res.status === 401 || res.redirected) {
+        window.location = '/login?next=' + encodeURIComponent(location.pathname);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         btn.querySelector('.like-count').textContent = data.likes;

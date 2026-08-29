@@ -2,7 +2,7 @@
 {% block title %}工具箱首页 · 荣信工具箱{% endblock %}
 {% block content %}
 <div class="dashboard-welcome">
-  <h2>你好，{{ session.user_name }} 👋</h2>
+  <h2>你好{% if session.user_name %}，{{ session.user_name }}{% endif %} 👋</h2>
   <p>选择一个工具开始工作</p>
 </div>
 <div class="tool-grid">
