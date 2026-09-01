@@ -55,6 +55,14 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-today-name a{color:inherit;text-decoration:none}
 .pg-today-name a:hover{color:var(--primary);text-decoration:underline}
 .pg-today-pct{font-size:13px;font-weight:600;color:var(--muted);flex-shrink:0}
+.pg-diff{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;font-size:12px;font-weight:600}
+.pg-diff .from{color:#9ca3af;text-decoration:line-through;text-decoration-thickness:1px}
+.pg-diff .arrow-r{color:#c4b5fd;font-size:13px;animation:slidearrow 1.6s ease-in-out infinite}
+@keyframes slidearrow{0%,100%{transform:translateX(0);opacity:.65}50%{transform:translateX(3px);opacity:1}}
+.pg-diff .to{color:#16a34a;font-weight:700}
+.pg-diff .to.down{color:#d97706}
+.pg-diff-status .from{background:#f3f4f6;color:#9ca3af;padding:1px 7px;border-radius:8px;text-decoration:line-through}
+.pg-diff-status .to{padding:1px 7px;border-radius:8px}
 .pg-today-empty{color:#9ca3af;font-size:13px;padding:12px;text-align:center}
 
 /* toolbar */
@@ -262,12 +270,33 @@ function renderHero(d) {
   </div>`;
 }
 
-function renderTodayItem(t) {
+function renderTodayItem(t, isChanged) {
+  const pct = t.progress || 0;
+  let statusPart, pctPart;
+  if (isChanged && t.prev_status != null && t.prev_status !== t.status) {
+    statusPart = `<span class="pg-diff pg-diff-status">
+      <span class="from pg-task-status ${t.prev_status}">${t.prev_status}</span>
+      <span class="arrow-r">→</span>
+      <span class="to pg-task-status ${t.status}">${t.status}</span>
+    </span>`;
+  } else {
+    statusPart = `<span class="pg-task-status ${t.status}">${t.status}</span>`;
+  }
+  if (isChanged && t.prev_progress != null && t.prev_progress !== pct) {
+    const down = pct < t.prev_progress;
+    pctPart = `<span class="pg-diff">
+      <span class="from">${t.prev_progress}%</span>
+      <span class="arrow-r">→</span>
+      <span class="to${down ? ' down' : ''}">${pct}%</span>
+    </span>`;
+  } else {
+    pctPart = `<span class="pg-today-pct">${pct}%</span>`;
+  }
   return `<div class="pg-today-item">
     <span class="pg-today-mod" style="background:${t.module_color}18;color:${t.module_color}">${t.module_icon} ${t.module_name}</span>
     <span class="pg-today-name" title="${esc(t.title)}"><a href="/requests/${t.id}">${esc(t.title)}</a></span>
-    <span class="pg-task-status ${t.status}">${t.status}</span>
-    <span class="pg-today-pct">${t.progress||0}%</span>
+    ${statusPart}
+    ${pctPart}
   </div>`;
 }
 function renderToday(today) {
@@ -284,11 +313,11 @@ function renderToday(today) {
     <div class="pg-today-cols">
       <div class="pg-today-col">
         <h4>今日新增 (${nw.length})</h4>
-        ${nw.length ? nw.map(renderTodayItem).join('') : '<div class="pg-today-empty">今天还没有新增任务</div>'}
+        ${nw.length ? nw.map(t => renderTodayItem(t, false)).join('') : '<div class="pg-today-empty">今天还没有新增任务</div>'}
       </div>
       <div class="pg-today-col">
         <h4>今日变动 (${ch.length})</h4>
-        ${ch.length ? ch.map(renderTodayItem).join('') : '<div class="pg-today-empty">今天还没有任务变动</div>'}
+        ${ch.length ? ch.map(t => renderTodayItem(t, true)).join('') : '<div class="pg-today-empty">今天还没有任务变动</div>'}
       </div>
     </div>
   </div>`;

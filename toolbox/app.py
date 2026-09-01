@@ -114,6 +114,11 @@ def init_db():
     if "updated_at" not in req_cols:
         cur.execute("ALTER TABLE requirements ADD COLUMN updated_at TEXT")
         cur.execute("UPDATE requirements SET updated_at = created_at WHERE updated_at IS NULL")
+    # v4: 变更前后对比（今日进度展示 30% → 100%）
+    if "prev_status" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN prev_status TEXT")
+    if "prev_progress" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN prev_progress INTEGER")
     conn.commit()
     conn.close()
 
@@ -821,6 +826,9 @@ def batch_update_requirements():
         rid = u.get("id")
         if not rid:
             continue
+        old = conn.execute(
+            "SELECT status, progress FROM requirements WHERE id = ?", (rid,)
+        ).fetchone()
         sets, vals = [], []
         if "status" in u and u["status"] in ("待处理", "进行中", "已完成", "已搁置"):
             sets.append("status = ?")
@@ -842,6 +850,16 @@ def batch_update_requirements():
             vals.append(u["content"].strip())
         if not sets:
             continue
+        # 记录变更前的状态/进度（仅当本次真的改了对应字段且值不同）
+        if old is not None:
+            new_status = u.get("status")
+            new_prog = u.get("progress")
+            if new_status is not None and new_status != old["status"]:
+                sets.append("prev_status = ?")
+                vals.append(old["status"])
+            if new_prog is not None and int(new_prog) != (old["progress"] or 0):
+                sets.append("prev_progress = ?")
+                vals.append(old["progress"] or 0)
         sets.append("updated_at = ?")
         vals.append(now_str())
         vals.append(rid)
