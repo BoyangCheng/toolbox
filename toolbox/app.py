@@ -110,6 +110,10 @@ def init_db():
         cur.execute("ALTER TABLE requirements ADD COLUMN progress INTEGER DEFAULT 0")
     if "priority" not in req_cols:
         cur.execute("ALTER TABLE requirements ADD COLUMN priority TEXT DEFAULT '中'")
+    # v3: 今日进度所需
+    if "updated_at" not in req_cols:
+        cur.execute("ALTER TABLE requirements ADD COLUMN updated_at TEXT")
+        cur.execute("UPDATE requirements SET updated_at = created_at WHERE updated_at IS NULL")
     conn.commit()
     conn.close()
 
@@ -708,6 +712,20 @@ def api_progress():
             orphans,
         ))
 
+    today = datetime.now().strftime("%Y-%m-%d")
+    new_today, changed_today = [], []
+    for t in all_tasks:
+        cat = t.get("category") or ""
+        meta = MODULE_MAP.get(cat, {"name": "未分类", "icon": "📌", "color": "#6b7280"})
+        item = {**t, "module_name": meta["name"], "module_icon": meta["icon"],
+                "module_color": meta["color"]}
+        created = (t.get("created_at") or "")[:10]
+        updated = (t.get("updated_at") or "")[:10]
+        if created == today:
+            new_today.append(item)
+        elif updated == today:
+            changed_today.append(item)
+
     return jsonify({
         "total": total,
         "completed": completed,
@@ -716,6 +734,7 @@ def api_progress():
         "shelved": shelved,
         "avg_progress": overrides.get("overall", avg_progress),
         "modules": modules_data,
+        "today": {"date": today, "new": new_today, "changed": changed_today},
     })
 
 
@@ -775,10 +794,10 @@ def batch_create_requirements():
             except ValueError:
                 pass  # 非法日期就用当前时间
         cur = conn.execute(
-            "INSERT INTO requirements (title, content, author, status, category, progress, priority, created_at, ip) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO requirements (title, content, author, status, category, progress, priority, created_at, updated_at, ip) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (title, content or title, session.get("user_name", "API"),
-             status, category, progress, priority, created_at, client_ip()),
+             status, category, progress, priority, created_at, created_at, client_ip()),
         )
         created.append({"id": cur.lastrowid, "title": title})
     conn.commit()
@@ -823,6 +842,8 @@ def batch_update_requirements():
             vals.append(u["content"].strip())
         if not sets:
             continue
+        sets.append("updated_at = ?")
+        vals.append(now_str())
         vals.append(rid)
         conn.execute(f"UPDATE requirements SET {', '.join(sets)} WHERE id = ?", vals)
         updated += 1
