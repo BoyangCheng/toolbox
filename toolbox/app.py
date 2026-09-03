@@ -717,7 +717,13 @@ def api_progress():
             orphans,
         ))
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 支持 ?date=YYYY-MM-DD 查看历史某天；默认今天
+    req_date = (request.args.get("date") or "").strip()
+    try:
+        datetime.strptime(req_date, "%Y-%m-%d")
+        today = req_date
+    except ValueError:
+        today = datetime.now().strftime("%Y-%m-%d")
     new_today, changed_today = [], []
     for t in all_tasks:
         cat = t.get("category") or ""
@@ -739,7 +745,13 @@ def api_progress():
         "shelved": shelved,
         "avg_progress": overrides.get("overall", avg_progress),
         "modules": modules_data,
-        "today": {"date": today, "new": new_today, "changed": changed_today},
+        "today": {
+            "date": today,
+            "is_today": today == datetime.now().strftime("%Y-%m-%d"),
+            "min_date": min((t.get("created_at") or "")[:10] for t in all_tasks) if all_tasks else today,
+            "new": new_today,
+            "changed": changed_today,
+        },
     })
 
 
