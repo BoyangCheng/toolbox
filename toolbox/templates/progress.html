@@ -51,7 +51,7 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-dial button:disabled{opacity:.28;cursor:not-allowed}
 .pg-dial-date{min-width:118px;text-align:center;font-size:14px;font-weight:600;color:var(--text);padding:0 6px;cursor:pointer;user-select:none;position:relative}
 .pg-dial-date:hover{color:var(--primary)}
-.pg-dial-date input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0}
+.pg-dial-date input{position:absolute;left:50%;bottom:0;width:1px;height:1px;opacity:0;border:none;padding:0;pointer-events:none}
 .pg-dial-rel{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:-2px}
 .pg-dial .today-btn{width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)}
 @media(max-width:640px){.pg-dial{margin-left:0;width:100%;justify-content:center}.pg-dial-date{min-width:96px;font-size:13px}}
@@ -235,6 +235,17 @@ function shiftDate(days) {
   loadProgress();
 }
 function jumpToday() { _viewDate = null; loadProgress(); }
+function openDatePicker(e) {
+  const inp = document.getElementById('pg-date-input');
+  if (!inp) return;
+  if (typeof inp.showPicker === 'function') {
+    try { inp.showPicker(); return; } catch (err) { /* fallthrough */ }
+  }
+  inp.style.pointerEvents = 'auto';
+  inp.focus();
+  inp.click();
+  setTimeout(() => { inp.style.pointerEvents = 'none'; }, 300);
+}
 function pickDate(v) {
   if (!v) return;
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -348,10 +359,10 @@ function renderToday(today) {
       <span class="pg-today-badge">${total ? total + ' 项动态' : '暂无动态'}</span>
       <div class="pg-dial">
         <button onclick="shiftDate(-1)" title="前一天">‹</button>
-        <div class="pg-dial-date" title="点击选择日期">
+        <div class="pg-dial-date" title="点击选择日期" onclick="openDatePicker(event)">
           ${today.date}
           <span class="pg-dial-rel">${relLabel(today.date, today.is_today)}</span>
-          <input type="date" value="${today.date}" min="${today.min_date || ''}" max="${new Date().toISOString().slice(0,10)}" onchange="pickDate(this.value)">
+          <input type="date" id="pg-date-input" value="${today.date}" min="${today.min_date || ''}" max="${new Date().toISOString().slice(0,10)}" onchange="pickDate(this.value)">
         </div>
         <button onclick="shiftDate(1)" title="后一天" ${today.is_today ? 'disabled' : ''}>›</button>
         ${today.is_today ? '' : '<button class="today-btn" onclick="jumpToday()">回今天</button>'}
