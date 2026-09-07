@@ -295,7 +295,7 @@ async function loadProgress() {
   try {
     const res = await fetch('/api/progress' + (_viewDate ? '?date=' + _viewDate : ''));
     const data = await res.json();
-    loader.remove();
+    if (loader) loader.remove();
     root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules);
     // animate ring
     requestAnimationFrame(() => {
@@ -311,7 +311,7 @@ async function loadProgress() {
       });
     });
   } catch (e) {
-    loader.innerHTML = '<p style="text-align:center;color:#dc2626;padding:40px">加载失败: ' + e.message + '</p>';
+    (loader || root).innerHTML = '<p style="text-align:center;color:#dc2626;padding:40px">加载失败: ' + e.message + '</p>';
   }
 }
 
