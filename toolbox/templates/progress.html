@@ -250,16 +250,42 @@ const MODULES = {{ modules | tojson }};
 const MODULE_MAP = {};
 MODULES.forEach(m => MODULE_MAP[m.key] = m);
 
-let _viewDate = null;   // null = 今天
+let _viewDate = null;     // null = 今天
+let _serverToday = null;  // 服务器当天（权威），首次响应后写入
+
+// 本地时区安全的日期工具：绝不经过 toISOString()（那会转成 UTC，UTC+8 客户端会退一天）
+function fmtLocal(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function parseLocal(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function todayStr() { return _serverToday || fmtLocal(new Date()); }
+
 function shiftDate(days) {
-  const cur = _viewDate ? new Date(_viewDate + 'T00:00:00') : new Date();
+  const cur = parseLocal(_viewDate || todayStr());
   cur.setDate(cur.getDate() + days);
-  const iso = cur.toISOString().slice(0, 10);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  _viewDate = iso >= todayIso ? null : iso;
+  const iso = fmtLocal(cur);
+  _viewDate = iso >= todayStr() ? null : iso;
   loadProgress();
 }
 function jumpToday() { _viewDate = null; loadProgress(); }
+function pickDate(v) {
+  closeDateMenu();
+  if (!v) return;
+  _viewDate = v >= todayStr() ? null : v;
+  loadProgress();
+}
+function relLabel(dateStr, isToday) {
+  if (isToday) return '今天';
+  const diff = Math.round((parseLocal(todayStr()) - parseLocal(dateStr)) / 86400000);
+  if (diff === 1) return '昨天';
+  if (diff === 2) return '前天';
+  if (diff > 0) return diff + ' 天前';
+  return '';
+}
 function toggleDateMenu(e) {
   e.stopPropagation();
   const m = document.getElementById('pg-dial-menu');
@@ -271,30 +297,13 @@ function closeDateMenu() {
 }
 document.addEventListener('click', closeDateMenu);
 
-function pickDate(v) {
-  closeDateMenu();
-  if (!v) return;
-  const todayIso = new Date().toISOString().slice(0, 10);
-  _viewDate = v >= todayIso ? null : v;
-  loadProgress();
-}
-function relLabel(dateStr, isToday) {
-  if (isToday) return '今天';
-  const d = new Date(dateStr + 'T00:00:00'), t = new Date();
-  t.setHours(0,0,0,0);
-  const diff = Math.round((t - d) / 86400000);
-  if (diff === 1) return '昨天';
-  if (diff === 2) return '前天';
-  if (diff > 0) return diff + ' 天前';
-  return '';
-}
-
 async function loadProgress() {
   const root = document.getElementById('pg-root');
   const loader = document.getElementById('pg-loader');
   try {
     const res = await fetch('/api/progress' + (_viewDate ? '?date=' + _viewDate : ''));
     const data = await res.json();
+    if (data.today && data.today.server_today) _serverToday = data.today.server_today;
     if (loader) loader.remove();
     root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules);
     // animate ring
@@ -395,7 +404,7 @@ function renderToday(today) {
           <div class="pg-dial-menu-title">有动态的日期</div>
           ${(today.active_dates || []).map(a => `
             <button type="button" class="pg-dial-opt${a.date === today.date ? ' active' : ''}" onclick="pickDate('${a.date}')">
-              <span class="od">${a.date}<span style="color:var(--muted);font-weight:400"> · ${relLabel(a.date, a.date === new Date().toISOString().slice(0,10))}</span></span>
+              <span class="od">${a.date}<span style="color:var(--muted);font-weight:400"> · ${relLabel(a.date, a.date === todayStr())}</span></span>
               <span class="oc">${a.new + a.changed}</span>
             </button>`).join('')}
         </div>

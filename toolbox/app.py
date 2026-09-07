@@ -762,6 +762,7 @@ def api_progress():
         "today": {
             "date": today,
             "is_today": today == datetime.now().strftime("%Y-%m-%d"),
+            "server_today": datetime.now().strftime("%Y-%m-%d"),
             "min_date": min((t.get("created_at") or "")[:10] for t in all_tasks) if all_tasks else today,
             "active_dates": active_dates,
             "new": new_today,
