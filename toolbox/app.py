@@ -737,6 +737,20 @@ def api_progress():
         elif updated == today:
             changed_today.append(item)
 
+    # 有动态的日期清单（供前端下拉直接跳转）
+    day_counts = {}
+    for t in all_tasks:
+        c = (t.get("created_at") or "")[:10]
+        u = (t.get("updated_at") or "")[:10]
+        if c:
+            day_counts.setdefault(c, {"new": 0, "changed": 0})["new"] += 1
+        if u and u != c:
+            day_counts.setdefault(u, {"new": 0, "changed": 0})["changed"] += 1
+    active_dates = [
+        {"date": d, "new": v["new"], "changed": v["changed"]}
+        for d, v in sorted(day_counts.items(), reverse=True)
+    ]
+
     return jsonify({
         "total": total,
         "completed": completed,
@@ -749,6 +763,7 @@ def api_progress():
             "date": today,
             "is_today": today == datetime.now().strftime("%Y-%m-%d"),
             "min_date": min((t.get("created_at") or "")[:10] for t in all_tasks) if all_tasks else today,
+            "active_dates": active_dates,
             "new": new_today,
             "changed": changed_today,
         },

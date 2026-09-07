@@ -45,16 +45,32 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-today-title{font-size:17px;font-weight:700;color:var(--text)}
 .pg-today-date{font-size:13px;color:var(--muted)}
 .pg-today-badge{font-size:12px;padding:2px 10px;border-radius:10px;font-weight:600;background:#eef2ff;color:#4f46e5}
-.pg-dial{display:flex;align-items:center;gap:2px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:3px;margin-left:auto}
-.pg-dial button{width:30px;height:30px;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--muted);font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.pg-dial{display:flex;align-items:center;gap:2px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:3px;margin-left:auto;position:relative}
+.pg-dial button{min-width:32px;height:32px;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
 .pg-dial button:hover:not(:disabled){background:#fff;color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.pg-dial button:active:not(:disabled){transform:scale(.94)}
 .pg-dial button:disabled{opacity:.28;cursor:not-allowed}
-.pg-dial-date{min-width:118px;text-align:center;font-size:14px;font-weight:600;color:var(--text);padding:0 6px;cursor:pointer;user-select:none;position:relative}
-.pg-dial-date:hover{color:var(--primary)}
-.pg-dial-date input{position:absolute;left:50%;bottom:0;width:1px;height:1px;opacity:0;border:none;padding:0;pointer-events:none}
-.pg-dial-rel{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:-2px}
-.pg-dial .today-btn{width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)}
-@media(max-width:640px){.pg-dial{margin-left:0;width:100%;justify-content:center}.pg-dial-date{min-width:96px;font-size:13px}}
+.pg-dial-date{min-width:120px;height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;background:transparent;border:none;border-radius:7px;cursor:pointer;padding:0 8px;transition:all .12s}
+.pg-dial-date:hover{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.pg-dial-date .d{font-size:14px;font-weight:600;color:var(--text)}
+.pg-dial-date .r{font-size:11px;font-weight:500;color:var(--muted)}
+.pg-dial-menu{position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;min-width:210px;max-height:300px;overflow-y:auto;z-index:900;display:none}
+.pg-dial-menu.show{display:block}
+.pg-dial-menu-title{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;padding:6px 10px 8px}
+.pg-dial-opt{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:transparent;border-radius:8px;cursor:pointer;text-align:left;font-size:13px;color:var(--text);transition:background .1s}
+.pg-dial-opt:hover{background:#f5f3ff}
+.pg-dial-opt.active{background:#eef2ff;color:var(--primary);font-weight:600}
+.pg-dial-opt .od{flex:1}
+.pg-dial-opt .oc{font-size:11px;color:var(--muted);background:#f1f5f9;padding:1px 7px;border-radius:8px}
+.pg-dial-opt.active .oc{background:#ddd6fe;color:var(--primary)}
+@media(max-width:640px){
+  .pg-dial{margin-left:0;width:100%;justify-content:space-between;padding:4px}
+  .pg-dial button{min-width:40px;height:38px;font-size:18px}
+  .pg-dial-date{flex:1;height:38px}
+  .pg-dial-date .d{font-size:15px}
+  .pg-dial-menu{left:0;right:0;min-width:0}
+  .pg-dial-opt{padding:11px 12px;font-size:14px}
+}
 .pg-today-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 @media(max-width:900px){.pg-today-cols{grid-template-columns:1fr;gap:14px}}
 .pg-today-col h4{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid #f1f5f9}
@@ -74,6 +90,15 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-diff-status .from{background:#f3f4f6;color:#9ca3af;padding:1px 7px;border-radius:8px;text-decoration:line-through}
 .pg-diff-status .to{padding:1px 7px;border-radius:8px}
 .pg-today-empty{color:#9ca3af;font-size:13px;padding:12px;text-align:center}
+@media(max-width:640px){
+  .pg-today{padding:16px 14px}
+  .pg-today-head{gap:8px}
+  .pg-today-title{font-size:16px}
+  .pg-today-item{flex-wrap:wrap;gap:6px;padding:10px}
+  .pg-today-name{flex:1 1 100%;order:-1;white-space:normal;line-height:1.4}
+  .pg-today-mod{font-size:10px}
+  .pg-diff,.pg-today-pct{margin-left:auto}
+}
 
 /* toolbar */
 .pg-toolbar{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
@@ -235,18 +260,19 @@ function shiftDate(days) {
   loadProgress();
 }
 function jumpToday() { _viewDate = null; loadProgress(); }
-function openDatePicker(e) {
-  const inp = document.getElementById('pg-date-input');
-  if (!inp) return;
-  if (typeof inp.showPicker === 'function') {
-    try { inp.showPicker(); return; } catch (err) { /* fallthrough */ }
-  }
-  inp.style.pointerEvents = 'auto';
-  inp.focus();
-  inp.click();
-  setTimeout(() => { inp.style.pointerEvents = 'none'; }, 300);
+function toggleDateMenu(e) {
+  e.stopPropagation();
+  const m = document.getElementById('pg-dial-menu');
+  if (m) m.classList.toggle('show');
 }
+function closeDateMenu() {
+  const m = document.getElementById('pg-dial-menu');
+  if (m) m.classList.remove('show');
+}
+document.addEventListener('click', closeDateMenu);
+
 function pickDate(v) {
+  closeDateMenu();
   if (!v) return;
   const todayIso = new Date().toISOString().slice(0, 10);
   _viewDate = v >= todayIso ? null : v;
@@ -358,14 +384,21 @@ function renderToday(today) {
       <span class="pg-today-title">📅 ${today.is_today ? '今日进度' : '当日进度'}</span>
       <span class="pg-today-badge">${total ? total + ' 项动态' : '暂无动态'}</span>
       <div class="pg-dial">
-        <button onclick="shiftDate(-1)" title="前一天">‹</button>
-        <div class="pg-dial-date" title="点击选择日期" onclick="openDatePicker(event)">
-          ${today.date}
-          <span class="pg-dial-rel">${relLabel(today.date, today.is_today)}</span>
-          <input type="date" id="pg-date-input" value="${today.date}" min="${today.min_date || ''}" max="${new Date().toISOString().slice(0,10)}" onchange="pickDate(this.value)">
+        <button onclick="shiftDate(-1)" title="前一天" aria-label="前一天">‹</button>
+        <button type="button" class="pg-dial-date" onclick="toggleDateMenu(event)" title="选择日期">
+          <span class="d">${today.date}</span>
+          <span class="r">${relLabel(today.date, today.is_today)}</span>
+        </button>
+        <button onclick="shiftDate(1)" title="后一天" aria-label="后一天" ${today.is_today ? 'disabled' : ''}>›</button>
+        ${today.is_today ? '' : '<button class="today-btn" onclick="jumpToday()" style="width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)">回今天</button>'}
+        <div class="pg-dial-menu" id="pg-dial-menu">
+          <div class="pg-dial-menu-title">有动态的日期</div>
+          ${(today.active_dates || []).map(a => `
+            <button type="button" class="pg-dial-opt${a.date === today.date ? ' active' : ''}" onclick="pickDate('${a.date}')">
+              <span class="od">${a.date}<span style="color:var(--muted);font-weight:400"> · ${relLabel(a.date, a.date === new Date().toISOString().slice(0,10))}</span></span>
+              <span class="oc">${a.new + a.changed}</span>
+            </button>`).join('')}
         </div>
-        <button onclick="shiftDate(1)" title="后一天" ${today.is_today ? 'disabled' : ''}>›</button>
-        ${today.is_today ? '' : '<button class="today-btn" onclick="jumpToday()">回今天</button>'}
       </div>
     </div>
     <div class="pg-today-cols">
