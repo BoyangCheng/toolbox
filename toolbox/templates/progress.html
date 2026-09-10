@@ -252,6 +252,7 @@ MODULES.forEach(m => MODULE_MAP[m.key] = m);
 
 let _viewDate = null;     // null = 今天
 let _serverToday = null;  // 服务器当天（权威），首次响应后写入
+let _minDate = null;      // 最早有数据的日期，‹ 到此为止
 
 // 本地时区安全的日期工具：绝不经过 toISOString()（那会转成 UTC，UTC+8 客户端会退一天）
 function fmtLocal(d) {
@@ -268,6 +269,7 @@ function shiftDate(days) {
   const cur = parseLocal(_viewDate || todayStr());
   cur.setDate(cur.getDate() + days);
   const iso = fmtLocal(cur);
+  if (_minDate && iso < _minDate) return;   // 不往更早的空白日期翻
   _viewDate = iso >= todayStr() ? null : iso;
   loadProgress();
 }
@@ -297,13 +299,17 @@ function closeDateMenu() {
 }
 document.addEventListener('click', closeDateMenu);
 
+let _loadSeq = 0;
 async function loadProgress() {
+  const seq = ++_loadSeq;
   const root = document.getElementById('pg-root');
   const loader = document.getElementById('pg-loader');
   try {
     const res = await fetch('/api/progress' + (_viewDate ? '?date=' + _viewDate : ''));
     const data = await res.json();
+    if (seq !== _loadSeq) return;   // 已被更新的 ‹/›/选日请求取代，丢弃旧响应
     if (data.today && data.today.server_today) _serverToday = data.today.server_today;
+    if (data.today && data.today.min_date) _minDate = data.today.min_date;
     if (loader) loader.remove();
     root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules);
     // animate ring
@@ -320,6 +326,7 @@ async function loadProgress() {
       });
     });
   } catch (e) {
+    if (seq !== _loadSeq) return;   // 过期请求的失败不能盖掉新渲染
     (loader || root).innerHTML = '<p style="text-align:center;color:#dc2626;padding:40px">加载失败: ' + e.message + '</p>';
   }
 }
@@ -393,14 +400,14 @@ function renderToday(today) {
       <span class="pg-today-title">📅 ${today.is_today ? '今日进度' : '当日进度'}</span>
       <span class="pg-today-badge">${total ? total + ' 项动态' : '暂无动态'}</span>
       <div class="pg-dial">
-        <button onclick="shiftDate(-1)" title="前一天" aria-label="前一天">‹</button>
+        <button onclick="shiftDate(-1)" title="前一天" aria-label="前一天" ${today.min_date && today.date <= today.min_date ? 'disabled' : ''}>‹</button>
         <button type="button" class="pg-dial-date" onclick="toggleDateMenu(event)" title="选择日期">
           <span class="d">${today.date}</span>
           <span class="r">${relLabel(today.date, today.is_today)}</span>
         </button>
         <button onclick="shiftDate(1)" title="后一天" aria-label="后一天" ${today.is_today ? 'disabled' : ''}>›</button>
         ${today.is_today ? '' : '<button class="today-btn" onclick="jumpToday()" style="width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)">回今天</button>'}
-        <div class="pg-dial-menu" id="pg-dial-menu">
+        <div class="pg-dial-menu" id="pg-dial-menu" onclick="event.stopPropagation()">
           <div class="pg-dial-menu-title">有动态的日期</div>
           ${(today.active_dates || []).map(a => `
             <button type="button" class="pg-dial-opt${a.date === today.date ? ' active' : ''}" onclick="pickDate('${a.date}')">

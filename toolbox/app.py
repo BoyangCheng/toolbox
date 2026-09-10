@@ -718,12 +718,14 @@ def api_progress():
         ))
 
     # 支持 ?date=YYYY-MM-DD 查看历史某天；默认今天
+    server_today = datetime.now().strftime("%Y-%m-%d")
     req_date = (request.args.get("date") or "").strip()
     try:
-        datetime.strptime(req_date, "%Y-%m-%d")
-        today = req_date
+        today = datetime.strptime(req_date, "%Y-%m-%d").strftime("%Y-%m-%d")  # 规范化（补零）
     except ValueError:
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = server_today
+    if today > server_today:
+        today = server_today
     new_today, changed_today = [], []
     for t in all_tasks:
         cat = t.get("category") or ""
@@ -749,6 +751,7 @@ def api_progress():
     active_dates = [
         {"date": d, "new": v["new"], "changed": v["changed"]}
         for d, v in sorted(day_counts.items(), reverse=True)
+        if d <= server_today
     ]
 
     return jsonify({
@@ -761,9 +764,9 @@ def api_progress():
         "modules": modules_data,
         "today": {
             "date": today,
-            "is_today": today == datetime.now().strftime("%Y-%m-%d"),
-            "server_today": datetime.now().strftime("%Y-%m-%d"),
-            "min_date": min((t.get("created_at") or "")[:10] for t in all_tasks) if all_tasks else today,
+            "is_today": today == server_today,
+            "server_today": server_today,
+            "min_date": min(day_counts) if day_counts else server_today,
             "active_dates": active_dates,
             "new": new_today,
             "changed": changed_today,
@@ -838,6 +841,21 @@ def batch_create_requirements():
     return jsonify({"created": len(created), "items": created})
 
 
+def _prev_baseline(old, status_changed, prog_changed):
+    """今日变动展示用的“变更前”基线：跨天则重置为本次变更前的值，
+    同一天内保留当天首次变更前的值，使 prev_* 只反映“这一天”的净变化。"""
+    same_day = (old["updated_at"] or "")[:10] == now_str()[:10]
+    if status_changed:
+        prev_status = old["prev_status"] if (same_day and old["prev_status"] is not None) else old["status"]
+    else:
+        prev_status = old["prev_status"] if same_day else None
+    if prog_changed:
+        prev_progress = old["prev_progress"] if (same_day and old["prev_progress"] is not None) else (old["progress"] or 0)
+    else:
+        prev_progress = old["prev_progress"] if same_day else None
+    return prev_status, prev_progress
+
+
 @app.route("/api/requirements/batch", methods=["PUT"])
 @login_required
 def batch_update_requirements():
@@ -855,41 +873,40 @@ def batch_update_requirements():
         if not rid:
             continue
         old = conn.execute(
-            "SELECT status, progress FROM requirements WHERE id = ?", (rid,)
+            "SELECT status, progress, category, priority, title, content, "
+            "prev_status, prev_progress, updated_at FROM requirements WHERE id = ?", (rid,)
         ).fetchone()
-        sets, vals = [], []
-        if "status" in u and u["status"] in ("待处理", "进行中", "已完成", "已搁置"):
-            sets.append("status = ?")
-            vals.append(u["status"])
-        if "progress" in u:
-            sets.append("progress = ?")
-            vals.append(max(0, min(100, int(u["progress"]))))
-        if "category" in u and u["category"] in VALID_CATEGORIES:
-            sets.append("category = ?")
-            vals.append(u["category"])
-        if "priority" in u and u["priority"] in VALID_PRIORITIES:
-            sets.append("priority = ?")
-            vals.append(u["priority"])
-        if "title" in u:
-            sets.append("title = ?")
-            vals.append(u["title"].strip())
-        if "content" in u:
-            sets.append("content = ?")
-            vals.append(u["content"].strip())
-        if not sets:
+        if old is None:
             continue
-        # 记录变更前的状态/进度（仅当本次真的改了对应字段且值不同）
-        if old is not None:
-            new_status = u.get("status")
-            new_prog = u.get("progress")
-            if new_status is not None and new_status != old["status"]:
-                sets.append("prev_status = ?")
-                vals.append(old["status"])
-            if new_prog is not None and int(new_prog) != (old["progress"] or 0):
-                sets.append("prev_progress = ?")
-                vals.append(old["progress"] or 0)
-        sets.append("updated_at = ?")
-        vals.append(now_str())
+        sets, vals = [], []
+
+        def want(field, value):
+            cur = (old[field] or 0) if field == "progress" else old[field]
+            if value != cur:
+                sets.append(f"{field} = ?")
+                vals.append(value)
+
+        if "status" in u and u["status"] in ("待处理", "进行中", "已完成", "已搁置"):
+            want("status", u["status"])
+        if "progress" in u:
+            want("progress", max(0, min(100, int(u["progress"]))))
+        if "category" in u and u["category"] in VALID_CATEGORIES:
+            want("category", u["category"])
+        if "priority" in u and u["priority"] in VALID_PRIORITIES:
+            want("priority", u["priority"])
+        if "title" in u:
+            want("title", u["title"].strip())
+        if "content" in u:
+            want("content", u["content"].strip())
+        if not sets:
+            continue  # 无实际变化：不刷 updated_at，避免产生幽灵“今日变动”
+        prev_status, prev_progress = _prev_baseline(
+            old,
+            any(x.startswith("status =") for x in sets),
+            any(x.startswith("progress =") for x in sets),
+        )
+        sets += ["prev_status = ?", "prev_progress = ?", "updated_at = ?"]
+        vals += [prev_status, prev_progress, now_str()]
         vals.append(rid)
         conn.execute(f"UPDATE requirements SET {', '.join(sets)} WHERE id = ?", vals)
         updated += 1
@@ -1015,8 +1032,20 @@ def update_status(rid):
     if status not in ("待处理", "进行中", "已完成", "已搁置"):
         abort(400)
     conn = get_db()
-    conn.execute("UPDATE requirements SET status = ? WHERE id = ?", (status, rid))
-    conn.commit()
+    old = conn.execute(
+        "SELECT status, progress, prev_status, prev_progress, updated_at "
+        "FROM requirements WHERE id = ?", (rid,)
+    ).fetchone()
+    if old is None:
+        conn.close()
+        abort(404)
+    if old["status"] != status:  # 原样保存不刷 updated_at，不覆盖 prev_status
+        prev_status, prev_progress = _prev_baseline(old, True, False)
+        conn.execute(
+            "UPDATE requirements SET status = ?, prev_status = ?, prev_progress = ?, updated_at = ? WHERE id = ?",
+            (status, prev_status, prev_progress, now_str(), rid),
+        )
+        conn.commit()
     conn.close()
     return redirect(url_for("requirement_detail", rid=rid))
 
