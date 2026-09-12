@@ -90,6 +90,22 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-diff-status .from{background:#f3f4f6;color:#9ca3af;padding:1px 7px;border-radius:8px;text-decoration:line-through}
 .pg-diff-status .to{padding:1px 7px;border-radius:8px}
 .pg-today-empty{color:#9ca3af;font-size:13px;padding:12px;text-align:center}
+.pg-today-note{font-size:12px;color:#9ca3af;margin:-6px 0 12px}
+
+/* weekly report card（右下角） */
+.pg-report-row{display:flex;justify-content:flex-end;margin-top:24px}
+.pg-report{width:100%;max-width:520px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 22px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.pg-report-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.pg-report-title{font-size:16px;font-weight:700;color:var(--text)}
+.pg-report-more{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+.pg-report-more:hover{color:var(--primary);text-decoration:underline}
+.pg-report-week{font-size:12px;color:var(--muted);margin-bottom:4px}
+.pg-report-name{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.pg-report-sum{font-size:13px;color:#374151;line-height:1.55;white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.pg-report-pdf{display:inline-block;margin-top:10px;font-size:13px;color:var(--primary);text-decoration:none}
+.pg-report-pdf:hover{text-decoration:underline}
+.pg-report-empty{font-size:13px;color:#9ca3af}
+@media(max-width:640px){.pg-report{max-width:100%;padding:16px 14px}}
 @media(max-width:640px){
   .pg-today{padding:16px 14px}
   .pg-today-head{gap:8px}
@@ -311,7 +327,7 @@ async function loadProgress() {
     if (data.today && data.today.server_today) _serverToday = data.today.server_today;
     if (data.today && data.today.min_date) _minDate = data.today.min_date;
     if (loader) loader.remove();
-    root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules);
+    root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules) + renderReport(data.latest_report);
     // animate ring
     requestAnimationFrame(() => {
       const fg = document.querySelector('.pg-ring-fg');
@@ -417,6 +433,7 @@ function renderToday(today) {
         </div>
       </div>
     </div>
+    <div class="pg-today-note">每日下午 5 点更新</div>
     <div class="pg-today-cols">
       <div class="pg-today-col">
         <h4>今日新增 (${nw.length})</h4>
@@ -429,6 +446,25 @@ function renderToday(today) {
     </div>
   </div>`;
 }
+function renderReport(r) {
+  const body = r ? `
+      <div class="pg-report-week">${esc(r.week_start)} 那一周</div>
+      <div class="pg-report-name">${esc(r.title)}</div>
+      ${r.summary ? `<div class="pg-report-sum">${esc(r.summary)}</div>` : ''}
+      ${r.pdf ? `<a class="pg-report-pdf" href="/uploads/${esc(r.pdf)}" target="_blank">📄 查看周报 PDF</a>` : ''}`
+    : `<div class="pg-report-empty">还没有周报，点「更多」上传第一份</div>`;
+  return `
+  <div class="pg-report-row">
+    <div class="pg-report">
+      <div class="pg-report-head">
+        <span class="pg-report-title">📝 上周周报</span>
+        <a class="pg-report-more" href="/reports">更多 →</a>
+      </div>
+      ${body}
+    </div>
+  </div>`;
+}
+
 function renderToolbar() {
   return `
   <div class="pg-toolbar">

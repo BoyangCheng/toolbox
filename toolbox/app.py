@@ -119,6 +119,18 @@ def init_db():
         cur.execute("ALTER TABLE requirements ADD COLUMN prev_status TEXT")
     if "prev_progress" not in req_cols:
         cur.execute("ALTER TABLE requirements ADD COLUMN prev_progress INTEGER")
+    # v5: 周报
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS weekly_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_start TEXT NOT NULL,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL DEFAULT '',
+            pdf TEXT,
+            author TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -678,6 +690,11 @@ def api_progress():
         "(SELECT COUNT(*) FROM comments c WHERE c.requirement_id = r.id) AS comment_count "
         "FROM requirements r ORDER BY r.id DESC"
     ).fetchall()
+    latest = conn.execute(
+        "SELECT id, week_start, title, summary, pdf FROM weekly_reports "
+        "ORDER BY week_start DESC, id DESC LIMIT 1"
+    ).fetchone()
+    latest_report = dict(latest) if latest else None
     conn.close()
 
     all_tasks = [dict(r) for r in rows]
@@ -762,6 +779,7 @@ def api_progress():
         "shelved": shelved,
         "avg_progress": overrides.get("overall", avg_progress),
         "modules": modules_data,
+        "latest_report": latest_report,
         "today": {
             "date": today,
             "is_today": today == server_today,
@@ -1028,8 +1046,14 @@ def add_comment(rid):
 @app.route("/requests/<int:rid>/status", methods=["POST"])
 @login_required
 def update_status(rid):
+    """详情页保存：状态 + 完成百分比。只写真正变化的字段，无变化不刷 updated_at。"""
     status = (request.form.get("status") or "").strip()
     if status not in ("待处理", "进行中", "已完成", "已搁置"):
+        abort(400)
+    raw_prog = (request.form.get("progress") or "").strip()
+    try:
+        progress = max(0, min(100, int(raw_prog))) if raw_prog != "" else None
+    except ValueError:
         abort(400)
     conn = get_db()
     old = conn.execute(
@@ -1039,15 +1063,79 @@ def update_status(rid):
     if old is None:
         conn.close()
         abort(404)
-    if old["status"] != status:  # 原样保存不刷 updated_at，不覆盖 prev_status
-        prev_status, prev_progress = _prev_baseline(old, True, False)
+    status_changed = old["status"] != status
+    prog_changed = progress is not None and progress != (old["progress"] or 0)
+    if status_changed or prog_changed:
+        prev_status, prev_progress = _prev_baseline(old, status_changed, prog_changed)
         conn.execute(
-            "UPDATE requirements SET status = ?, prev_status = ?, prev_progress = ?, updated_at = ? WHERE id = ?",
-            (status, prev_status, prev_progress, now_str(), rid),
+            "UPDATE requirements SET status = ?, progress = ?, prev_status = ?, prev_progress = ?, updated_at = ? "
+            "WHERE id = ?",
+            (status, progress if prog_changed else (old["progress"] or 0),
+             prev_status, prev_progress, now_str(), rid),
         )
         conn.commit()
     conn.close()
     return redirect(url_for("requirement_detail", rid=rid))
+
+
+# ---------- WEEKLY REPORTS ----------
+@app.route("/reports")
+def reports_page():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM weekly_reports ORDER BY week_start DESC, id DESC"
+    ).fetchall()
+    conn.close()
+    return render_template("reports.html", reports=rows)
+
+
+@app.route("/reports/upload", methods=["POST"])
+@login_required
+def reports_upload():
+    week_start = (request.form.get("week_start") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    summary = (request.form.get("summary") or "").strip()
+    try:
+        datetime.strptime(week_start, "%Y-%m-%d")
+    except ValueError:
+        abort(400)
+    if not title:
+        abort(400)
+    pdf_name = None
+    f = request.files.get("pdf")
+    if f and f.filename:
+        if not f.filename.lower().endswith(".pdf"):
+            abort(400)
+        pdf_name = uuid.uuid4().hex + ".pdf"
+        f.save(os.path.join(UPLOAD_DIR, pdf_name))
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO weekly_reports (week_start, title, summary, pdf, author, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (week_start, title, summary, pdf_name, session.get("user_name", ""), now_str()),
+    )
+    conn.commit()
+    conn.close()
+    return redirect(url_for("reports_page"))
+
+
+@app.route("/reports/<int:rpid>/delete", methods=["POST"])
+@login_required
+def reports_delete(rpid):
+    conn = get_db()
+    row = conn.execute("SELECT pdf FROM weekly_reports WHERE id = ?", (rpid,)).fetchone()
+    if row is None:
+        conn.close()
+        abort(404)
+    conn.execute("DELETE FROM weekly_reports WHERE id = ?", (rpid,))
+    conn.commit()
+    conn.close()
+    if row["pdf"]:
+        try:
+            os.remove(os.path.join(UPLOAD_DIR, row["pdf"]))
+        except OSError:
+            pass
+    return redirect(url_for("reports_page"))
 
 
 @app.route("/uploads/<path:filename>")

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}周报 · 荣信工具箱{% endblock %}
+{% block header_right %}
+  <a href="{{ url_for('progress_dashboard') }}" class="btn-logout">← 项目总进度</a>
+  {% if session.user_name %}
+    <span class="user-info">{{ session.user_name }} · {{ session.user_department }}</span>
+  {% else %}
+    <a href="{{ url_for('login', next=request.path) }}" class="btn-logout">登录</a>
+  {% endif %}
+{% endblock %}
+{% block subnav %}
+<nav class="subnav">
+  <a href="{{ url_for('new_requirement') }}">提需求</a>
+  <a href="{{ url_for('list_requirements') }}">所有需求</a>
+  <a href="{{ url_for('progress_dashboard') }}">项目总进度</a>
+  <a href="{{ url_for('reports_page') }}" class="active">周报</a>
+</nav>
+{% endblock %}
+{% block head %}
+<style>
+.rp-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:14px}
+.rp-item{padding:18px 20px;border:1px solid var(--border);border-radius:12px;background:#fcfcfd}
+.rp-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.rp-week{font-size:13px;color:var(--muted)}
+.rp-title{font-size:17px;font-weight:600;color:var(--text)}
+.rp-sum{white-space:pre-wrap;color:#374151;font-size:15px;line-height:1.6;margin:6px 0 8px}
+.rp-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.rp-actions a{color:var(--primary);text-decoration:none;font-size:14px}
+.rp-actions a:hover{text-decoration:underline}
+.rp-del{background:none;border:none;color:#9ca3af;font-size:13px;cursor:pointer;padding:0}
+.rp-del:hover{color:#dc2626}
+.rp-form .row{display:flex;gap:12px;flex-wrap:wrap}
+.rp-form .row label{flex:1;min-width:180px}
+.rp-form input[type="date"]{padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:#fafbfd;font-family:inherit}
+</style>
+{% endblock %}
+{% block content %}
+{% if session.user_name %}
+<section class="card">
+  <h2>上传周报</h2>
+  <form class="form rp-form" method="post" action="{{ url_for('reports_upload') }}" enctype="multipart/form-data">
+    <div class="row">
+      <label><span>周起始日 <em>*</em></span><input type="date" name="week_start" required></label>
+      <label><span>标题 <em>*</em></span><input type="text" name="title" maxlength="120" required placeholder="例：第 37 周 · 成本模块上线"></label>
+    </div>
+    <label><span>本周总结</span><textarea name="summary" rows="4" placeholder="几句话概括本周完成了什么、下周计划"></textarea></label>
+    <label><span>PDF 文件 <small>(可选，仅 .pdf)</small></span><input type="file" name="pdf" accept="application/pdf,.pdf"></label>
+    <div class="actions"><button class="btn primary" type="submit">发布周报</button></div>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>历史周报</h2>
+  {% if not reports %}
+    <p class="empty">还没有周报{% if not session.user_name %}，<a href="{{ url_for('login', next=request.path) }}">登录</a>后可上传{% endif %}</p>
+  {% else %}
+  <ul class="rp-list">
+    {% for r in reports %}
+    <li class="rp-item">
+      <div class="rp-top">
+        <span class="rp-week">{{ r.week_start }} 那一周</span>
+        <span class="rp-title">{{ r.title }}</span>
+      </div>
+      {% if r.summary %}<div class="rp-sum">{{ r.summary }}</div>{% endif %}
+      <div class="rp-actions">
+        {% if r.pdf %}<a href="{{ url_for('uploaded_file', filename=r.pdf) }}" target="_blank">📄 查看 PDF</a>{% endif %}
+        {% if r.author %}<span class="muted">{{ r.author }} · {{ r.created_at }}</span>{% endif %}
+        {% if session.user_name %}
+        <form method="post" action="{{ url_for('reports_delete', rpid=r.id) }}" onsubmit="return confirm('删除这份周报？')" style="margin-left:auto">
+          <button class="rp-del" type="submit">删除</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}
