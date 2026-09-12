@@ -24,6 +24,7 @@ VERSIONS_DIR = os.path.join(DATA_DIR, "flowchart_versions")
 VERSIONS_INDEX = os.path.join(DATA_DIR, "flowchart_versions_index.json")
 SECRET_KEY_FILE = os.path.join(BASE_DIR, ".secret_key")
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp", "bmp"}
+SAFE_UPLOAD_EXT = ALLOWED_EXT | {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "zip", "rar", "7z"}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -49,6 +50,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SECRET_KEY"] = _load_or_create_secret_key()
 app.config["SESSION_PERMANENT"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 
 # ---------- DB ----------
@@ -576,6 +578,9 @@ def flowchart_upload():
     ext = ""
     if "." in file.filename:
         ext = "." + file.filename.rsplit(".", 1)[1].lower()
+    # html/svg/xml 等会被浏览器当页面执行的扩展名不落盘，统一改为 .bin（服务端也只按附件下发）
+    if ext.lstrip(".") not in SAFE_UPLOAD_EXT:
+        ext = ".bin"
     file_id = uuid.uuid4().hex + ext
     fp = os.path.join(UPLOAD_DIR, file_id)
     file.save(fp)
@@ -1096,7 +1101,7 @@ def reports_upload():
     title = (request.form.get("title") or "").strip()
     summary = (request.form.get("summary") or "").strip()
     try:
-        datetime.strptime(week_start, "%Y-%m-%d")
+        week_start = datetime.strptime(week_start, "%Y-%m-%d").strftime("%Y-%m-%d")  # 规范化（补零）
     except ValueError:
         abort(400)
     if not title:
@@ -1138,9 +1143,18 @@ def reports_delete(rpid):
     return redirect(url_for("reports_page"))
 
 
+INLINE_EXT = ALLOWED_EXT | {"pdf"}   # 允许浏览器内联打开的类型；svg 会执行脚本，故意不在内
+
+
 @app.route("/uploads/<path:filename>")
 def uploaded_file(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    inline = ext in INLINE_EXT
+    resp = send_from_directory(UPLOAD_DIR, filename, as_attachment=not inline)
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    if not inline:
+        resp.headers["Content-Security-Policy"] = "sandbox"   # 即便被渲染也拿不到本站 cookie/接口
+    return resp
 
 
 if __name__ == "__main__":

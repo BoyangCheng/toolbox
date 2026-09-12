@@ -430,7 +430,7 @@ body {
 .progress-edit { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; color: var(--muted); }
 .progress-edit input {
   width: 68px; padding: 8px 8px; border: 1px solid var(--border); border-radius: 8px;
-  font-size: 15px; text-align: right; color: var(--text); background: #fafbfd;
+  font-size: 16px; text-align: right; color: var(--text); background: #fafbfd;
 }
 .progress-edit input:focus { outline: none; border-color: var(--primary); background: #fff; }
 .status-form select {
