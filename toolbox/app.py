@@ -648,6 +648,42 @@ def _save_module_progress(data):
     os.replace(tmp, MODULE_PROGRESS_FILE)
 
 
+# 每批量新增一条需求，自动给它所属模块 +0.8%、总进度 +0.1%（封顶 100%）
+PROGRESS_PER_TASK = 0.8
+OVERALL_PROGRESS_PER_TASK = 0.1
+
+
+def _norm_pct(v):
+    """百分比归一：0~100，保留一位小数，整数仍存成整数。
+    自动加成和手动设值两条写入路径共用，避免手动回写把累计的小数截掉。"""
+    x = max(0.0, min(100.0, round(float(v), 1)))
+    return int(x) if x == int(x) else x
+
+
+def _bump_module_progress(counts):
+    """counts: {模块key: 本次新增条数}。按条数累加覆盖值，封顶 100，保留一位小数。
+    只加已有覆盖值的键；没设过覆盖值的模块仍按任务自动平均，不在这里凭空造一个固定值。"""
+    total_n = sum(counts.values())
+    if not total_n:
+        return {}, []
+    overrides = _load_module_progress()
+    bumped, skipped = {}, []
+    for key, n in counts.items():
+        if key not in overrides:
+            skipped.append(key)
+            continue
+        overrides[key] = _norm_pct(overrides[key] + PROGRESS_PER_TASK * n)
+        bumped[key] = overrides[key]
+    if "overall" in overrides:
+        overrides["overall"] = _norm_pct(
+            overrides["overall"] + OVERALL_PROGRESS_PER_TASK * total_n)
+        bumped["overall"] = overrides["overall"]
+    else:
+        skipped.append("overall")
+    _save_module_progress(overrides)
+    return bumped, skipped
+
+
 @app.route("/api/modules/progress", methods=["GET", "POST"])
 def api_module_progress():
     """GET 返回覆盖值；POST 批量设置。
@@ -673,7 +709,7 @@ def api_module_progress():
             overrides.pop(k, None)
         else:
             try:
-                overrides[k] = max(0, min(100, int(v)))
+                overrides[k] = _norm_pct(v)
             except (TypeError, ValueError):
                 ignored.append(k)
                 continue
@@ -824,6 +860,7 @@ def batch_create_requirements():
 
     conn = get_db()
     created = []
+    counts = {}
     for item in items:
         title = (item.get("title") or "").strip()
         content = (item.get("content") or "").strip()
@@ -859,9 +896,20 @@ def batch_create_requirements():
              status, category, progress, priority, created_at, created_at, client_ip()),
         )
         created.append({"id": cur.lastrowid, "title": title})
+        counts[category] = counts.get(category, 0) + 1
     conn.commit()
     conn.close()
-    return jsonify({"created": len(created), "items": created})
+    # 需求已经 commit，加成失败不能反过来把整个请求变成 500——
+    # 否则前端只显示"请求失败"，操作者会重复粘贴导致需求翻倍
+    try:
+        bumped, skipped = _bump_module_progress(counts)
+        bump_err = None
+    except Exception as e:
+        bumped, skipped, bump_err = {}, [], str(e)
+        log_action("BUMP progress failed", client_ip(), f"counts={counts} err={e!r}")
+    return jsonify({"created": len(created), "items": created,
+                    "progress_bumped": bumped, "progress_skipped": skipped,
+                    "progress_error": bump_err})
 
 
 def _prev_baseline(old, status_changed, prog_changed):
