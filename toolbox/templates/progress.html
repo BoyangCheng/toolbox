@@ -29,7 +29,8 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-ring-bg{fill:none;stroke:rgba(255,255,255,.15);stroke-width:12}
 .pg-ring-fg{fill:none;stroke:#fff;stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
 .pg-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.pg-ring-pct{font-size:43px;font-weight:800;line-height:1}
+.pg-ring-pct{font-size:36px;font-weight:800;line-height:1;white-space:nowrap}
+.pg-ring-pct small{font-size:.5em;font-weight:700;margin-left:1px}
 .pg-ring-sub{font-size:13px;opacity:.7;margin-top:4px}
 .pg-hero-meta{flex:1;min-width:220px}
 .pg-hero-title{font-size:29px;font-weight:800;margin:0 0 8px;letter-spacing:.5px}
@@ -93,19 +94,20 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-today-note{font-size:12px;color:#9ca3af;margin:-6px 0 12px}
 
 /* weekly report card（右下角） */
-.pg-report-row{display:flex;justify-content:flex-end;margin-top:24px}
-.pg-report{width:100%;max-width:520px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 22px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
-.pg-report-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
-.pg-report-title{font-size:16px;font-weight:700;color:var(--text)}
-.pg-report-more{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
-.pg-report-more:hover{color:var(--primary);text-decoration:underline}
-.pg-report-week{font-size:12px;color:var(--muted);margin-bottom:4px}
-.pg-report-name{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
-.pg-report-sum{font-size:13px;color:#374151;line-height:1.55;white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.pg-report-pdf{display:inline-block;margin-top:10px;font-size:13px;color:var(--primary);text-decoration:none}
+/* 上周周报：嵌在紫色总进度框右侧；宽度不够时自成一行 */
+.pg-report{flex:0 0 360px;min-width:0;align-self:stretch;display:flex;flex-direction:column;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px 18px;color:#fff;text-align:left}
+.pg-report-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.pg-report-title{font-size:16px;font-weight:700}
+.pg-report-more{margin-left:auto;font-size:12px;color:rgba(255,255,255,.75);text-decoration:none;white-space:nowrap}
+.pg-report-more:hover{color:#fff;text-decoration:underline}
+.pg-report-week{font-size:12px;opacity:.7;margin-bottom:4px}
+.pg-report-name{font-size:15px;font-weight:600;margin-bottom:6px;overflow-wrap:anywhere}
+.pg-report-sum{font-size:13px;opacity:.9;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pg-report-pdf{align-self:flex-start;margin-top:auto;padding-top:10px;font-size:13px;font-weight:600;color:#fff;text-decoration:none}
 .pg-report-pdf:hover{text-decoration:underline}
-.pg-report-empty{font-size:13px;color:#9ca3af}
-@media(max-width:640px){.pg-report{max-width:100%;padding:16px 14px}}
+.pg-report-empty{font-size:13px;opacity:.7}
+@media(max-width:1359px){.pg-report{flex:1 1 100%}}
+@media(max-width:640px){.pg-report{padding:14px}}
 @media(max-width:640px){
   .pg-today{padding:16px 14px}
   .pg-today-head{gap:8px}
@@ -191,7 +193,7 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
   .pg-hero{padding:20px 16px;gap:16px;justify-content:center;text-align:center;border-radius:14px}
   .pg-ring-wrap{width:110px;height:110px}
   .pg-ring-wrap svg{width:110px;height:110px}
-  .pg-ring-pct{font-size:27px}
+  .pg-ring-pct{font-size:22px}
   .pg-hero-title{font-size:21px}
   .pg-hero-desc{font-size:13px;margin-bottom:12px}
   .pg-metrics{gap:6px;justify-content:center}
@@ -266,7 +268,7 @@ const MODULES = {{ modules | tojson }};
 const MODULE_MAP = {};
 MODULES.forEach(m => MODULE_MAP[m.key] = m);
 
-let _viewDate = null;     // null = 今天
+let _viewDate = null;     // null = 默认昨天（跟随服务器日期滚动）
 let _serverToday = null;  // 服务器当天（权威），首次响应后写入
 let _minDate = null;      // 最早有数据的日期，‹ 到此为止
 
@@ -280,21 +282,32 @@ function parseLocal(s) {
   return new Date(y, m - 1, d);
 }
 function todayStr() { return _serverToday || fmtLocal(new Date()); }
-
-function shiftDate(days) {
-  const cur = parseLocal(_viewDate || todayStr());
-  cur.setDate(cur.getDate() + days);
-  const iso = fmtLocal(cur);
-  if (_minDate && iso < _minDate) return;   // 不往更早的空白日期翻
-  _viewDate = iso >= todayStr() ? null : iso;
+function shiftStr(s, days) {
+  const d = parseLocal(s);
+  d.setDate(d.getDate() + days);
+  return fmtLocal(d);
+}
+function yesterdayStr() { return shiftStr(todayStr(), -1); }
+function curDate() { return _viewDate || yesterdayStr(); }
+function setViewDate(iso) {
+  if (iso > todayStr()) iso = todayStr();   // 最多看到今天
+  // 手动选的日期原样保存；只有首次打开和"回昨天"才用 null 跟随服务器日期。
+  // 若把"等于昨天"也折叠成 null，页面跨午夜后会被重拉到新的昨天，跳到用户没选的日期。
+  _viewDate = iso;
   loadProgress();
 }
-function jumpToday() { _viewDate = null; loadProgress(); }
+
+function shiftDate(days) {
+  const iso = shiftStr(curDate(), days);
+  if (_minDate && iso < _minDate) return;   // 不往更早的空白日期翻
+  if (iso > todayStr()) return;
+  setViewDate(iso);
+}
+function jumpDefault() { _viewDate = null; loadProgress(); }
 function pickDate(v) {
   closeDateMenu();
   if (!v) return;
-  _viewDate = v >= todayStr() ? null : v;
-  loadProgress();
+  setViewDate(v);
 }
 function relLabel(dateStr, isToday) {
   if (isToday) return '今天';
@@ -321,13 +334,16 @@ async function loadProgress() {
   const root = document.getElementById('pg-root');
   const loader = document.getElementById('pg-loader');
   try {
-    const res = await fetch('/api/progress' + (_viewDate ? '?date=' + _viewDate : ''));
+    const reqDate = curDate();
+    const res = await fetch('/api/progress?date=' + reqDate);
     const data = await res.json();
     if (seq !== _loadSeq) return;   // 已被更新的 ‹/›/选日请求取代，丢弃旧响应
     if (data.today && data.today.server_today) _serverToday = data.today.server_today;
+    // 首次加载的"昨天"是按浏览器时钟推的；和服务器对不上时按服务器的昨天重拉一次
+    if (_viewDate === null && reqDate !== yesterdayStr()) { loadProgress(); return; }
     if (data.today && data.today.min_date) _minDate = data.today.min_date;
     if (loader) loader.remove();
-    root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules) + renderReport(data.latest_report);
+    root.innerHTML = renderHero(data) + renderToday(data.today) + renderToolbar() + renderModules(data.modules);
     // animate ring
     requestAnimationFrame(() => {
       const fg = document.querySelector('.pg-ring-fg');
@@ -358,7 +374,7 @@ function renderHero(d) {
           stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
       </svg>
       <div class="pg-ring-label">
-        <span class="pg-ring-pct">${d.avg_progress}%</span>
+        <span class="pg-ring-pct">${d.avg_progress}<small>%</small></span>
         <span class="pg-ring-sub">总体进度</span>
       </div>
     </div>
@@ -373,6 +389,7 @@ function renderHero(d) {
         <div class="pg-metric"><div class="pg-metric-val">${d.shelved}</div><div class="pg-metric-lbl">已搁置</div></div>
       </div>
     </div>
+    ${renderReport(d.latest_report)}
   </div>`;
 }
 
@@ -410,10 +427,13 @@ function renderToday(today) {
   if (!today) return '';
   const nw = today.new || [], ch = today.changed || [];
   const total = nw.length + ch.length;
+  const isYest = today.date === yesterdayStr();
+  const word = today.is_today ? '今日' : isYest ? '昨日' : '当日';
+  const dayName = today.is_today ? '今天' : isYest ? '昨天' : '这天';
   return `
   <div class="pg-today">
     <div class="pg-today-head">
-      <span class="pg-today-title">📅 ${today.is_today ? '今日进度' : '当日进度'}</span>
+      <span class="pg-today-title">📅 ${word}进度</span>
       <span class="pg-today-badge">${total ? total + ' 项动态' : '暂无动态'}</span>
       <div class="pg-dial">
         <button onclick="shiftDate(-1)" title="前一天" aria-label="前一天" ${today.min_date && today.date <= today.min_date ? 'disabled' : ''}>‹</button>
@@ -422,7 +442,7 @@ function renderToday(today) {
           <span class="r">${relLabel(today.date, today.is_today)}</span>
         </button>
         <button onclick="shiftDate(1)" title="后一天" aria-label="后一天" ${today.is_today ? 'disabled' : ''}>›</button>
-        ${today.is_today ? '' : '<button class="today-btn" onclick="jumpToday()" style="width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)">回今天</button>'}
+        ${isYest ? '' : '<button class="today-btn" onclick="jumpDefault()" style="width:auto;padding:0 10px;font-size:12px;font-weight:600;color:var(--primary)">回昨天</button>'}
         <div class="pg-dial-menu" id="pg-dial-menu" onclick="event.stopPropagation()">
           <div class="pg-dial-menu-title">有动态的日期</div>
           ${(today.active_dates || []).map(a => `
@@ -436,12 +456,12 @@ function renderToday(today) {
     <div class="pg-today-note">每日下午 5 点更新</div>
     <div class="pg-today-cols">
       <div class="pg-today-col">
-        <h4>今日新增 (${nw.length})</h4>
-        ${nw.length ? nw.map(t => renderTodayItem(t, false)).join('') : `<div class="pg-today-empty">${today.is_today ? '今天' : '这天'}没有新增任务</div>`}
+        <h4>${word}新增 (${nw.length})</h4>
+        ${nw.length ? nw.map(t => renderTodayItem(t, false)).join('') : `<div class="pg-today-empty">${dayName}没有新增任务</div>`}
       </div>
       <div class="pg-today-col">
-        <h4>今日变动 (${ch.length})</h4>
-        ${ch.length ? ch.map(t => renderTodayItem(t, true)).join('') : `<div class="pg-today-empty">${today.is_today ? '今天' : '这天'}没有任务变动</div>`}
+        <h4>${word}变动 (${ch.length})</h4>
+        ${ch.length ? ch.map(t => renderTodayItem(t, true)).join('') : `<div class="pg-today-empty">${dayName}没有任务变动</div>`}
       </div>
     </div>
   </div>`;
@@ -454,15 +474,13 @@ function renderReport(r) {
       ${r.pdf ? `<a class="pg-report-pdf" href="/uploads/${esc(r.pdf)}" target="_blank">📄 查看周报 PDF</a>` : ''}`
     : `<div class="pg-report-empty">还没有周报，点「更多」上传第一份</div>`;
   return `
-  <div class="pg-report-row">
     <div class="pg-report">
       <div class="pg-report-head">
         <span class="pg-report-title">📝 上周周报</span>
         <a class="pg-report-more" href="/reports">更多 →</a>
       </div>
       ${body}
-    </div>
-  </div>`;
+    </div>`;
 }
 
 function renderToolbar() {
