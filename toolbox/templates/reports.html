@@ -44,21 +44,6 @@
 </style>
 {% endblock %}
 {% block content %}
-{% if session.user_name %}
-<section class="card">
-  <h2>上传周报</h2>
-  <form class="form rp-form" method="post" action="{{ url_for('reports_upload') }}" enctype="multipart/form-data">
-    <div class="row">
-      <label><span>周起始日 <em>*</em></span><input type="date" name="week_start" required></label>
-      <label><span>标题 <em>*</em></span><input type="text" name="title" maxlength="120" required placeholder="例：第 37 周 · 成本模块上线"></label>
-    </div>
-    <label><span>本周总结</span><textarea name="summary" rows="4" placeholder="几句话概括本周完成了什么、下周计划"></textarea></label>
-    <label><span>PDF 文件 <small>(可选，仅 .pdf)</small></span><input type="file" name="pdf" accept="application/pdf,.pdf"></label>
-    <div class="actions"><button class="btn primary" type="submit">发布周报</button></div>
-  </form>
-</section>
-{% endif %}
-
 <section class="card">
   <h2>历史周报</h2>
   {% if not reports %}
@@ -92,4 +77,18 @@
   </ul>
   {% endif %}
 </section>
+{% if session.user_name %}
+<section class="card">
+  <h2>上传周报</h2>
+  <form class="form rp-form" method="post" action="{{ url_for('reports_upload') }}" enctype="multipart/form-data">
+    <div class="row">
+      <label><span>周起始日 <em>*</em></span><input type="date" name="week_start" required></label>
+      <label><span>标题 <em>*</em></span><input type="text" name="title" maxlength="120" required placeholder="例：第 37 周 · 成本模块上线"></label>
+    </div>
+    <label><span>本周总结</span><textarea name="summary" rows="4" placeholder="几句话概括本周完成了什么、下周计划"></textarea></label>
+    <label><span>PDF 文件 <small>(可选，仅 .pdf)</small></span><input type="file" name="pdf" accept="application/pdf,.pdf"></label>
+    <div class="actions"><button class="btn primary" type="submit">发布周报</button></div>
+  </form>
+</section>
+{% endif %}
 {% endblock %}
