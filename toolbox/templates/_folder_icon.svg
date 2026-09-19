@@ -1,0 +1,6 @@
+<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" fill="currentColor" opacity=".15"/>
+  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+  <rect x="14.5" y="19" width="19" height="15" rx="2.5" fill="#fff" stroke="currentColor" stroke-width="2.6"/>
+  <text x="24" y="30" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="Arial, Helvetica, sans-serif">PDF</text>
+</svg>

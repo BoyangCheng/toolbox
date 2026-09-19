@@ -101,10 +101,16 @@ main.container{max-width:100%;padding-left:32px;padding-right:32px}
 .pg-report-more{margin-left:auto;font-size:12px;color:rgba(255,255,255,.75);text-decoration:none;white-space:nowrap}
 .pg-report-more:hover{color:#fff;text-decoration:underline}
 .pg-report-week{font-size:12px;opacity:.7;margin-bottom:4px}
-.pg-report-name{font-size:15px;font-weight:600;margin-bottom:6px;overflow-wrap:anywhere}
-.pg-report-sum{font-size:13px;opacity:.9;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.pg-report-pdf{align-self:flex-start;margin-top:auto;padding-top:10px;font-size:13px;font-weight:600;color:#fff;text-decoration:none}
-.pg-report-pdf:hover{text-decoration:underline}
+.pg-report-sum{font-size:13px;opacity:.9;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* 大号文件夹按钮：白底靠在紫色上，够显眼 */
+.pg-report-file{margin-top:auto;display:flex;align-items:center;gap:13px;padding:14px 16px;background:#fff;border-radius:12px;color:#4f46e5;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:transform .12s,box-shadow .12s}
+.pg-report-file:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.26)}
+.pg-report-file:active{transform:translateY(0)}
+.pg-report-file svg{width:48px;height:48px;flex-shrink:0}
+.pg-report-file .t{min-width:0}
+.pg-report-file .t b{display:block;font-size:16px;font-weight:700;line-height:1.3}
+.pg-report-file .t small{display:block;font-size:12px;color:#6b7280;margin-top:2px}
+.pg-report-file .go{margin-left:auto;font-size:20px;font-weight:700;opacity:.45}
 .pg-report-empty{font-size:13px;opacity:.7}
 @media(max-width:1359px){.pg-report{flex:1 1 100%}}
 @media(max-width:640px){.pg-report{padding:14px}}
@@ -466,12 +472,22 @@ function renderToday(today) {
     </div>
   </div>`;
 }
+const FOLDER_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" fill="currentColor" opacity=".15"/>
+  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+  <rect x="14.5" y="19" width="19" height="15" rx="2.5" fill="#fff" stroke="currentColor" stroke-width="2.6"/>
+  <text x="24" y="30" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="Arial, Helvetica, sans-serif">PDF</text>
+</svg>`;
+
 function renderReport(r) {
   const body = r ? `
       <div class="pg-report-week">${esc(r.week_start)} 那一周</div>
-      <div class="pg-report-name">${esc(r.title)}</div>
       ${r.summary ? `<div class="pg-report-sum">${esc(r.summary)}</div>` : ''}
-      ${r.pdf ? `<a class="pg-report-pdf" href="/uploads/${esc(r.pdf)}" target="_blank">📄 查看周报 PDF</a>` : ''}`
+      ${r.pdf ? `<a class="pg-report-file" href="/uploads/${esc(r.pdf)}" target="_blank" rel="noopener" title="${esc(r.title)}">
+        ${FOLDER_SVG}
+        <span class="t"><b>查看周报 PDF</b><small>点击打开完整周报</small></span>
+        <span class="go">→</span>
+      </a>` : ''}`
     : `<div class="pg-report-empty">还没有周报，点「更多」上传第一份</div>`;
   return `
     <div class="pg-report">
