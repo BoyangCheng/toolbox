@@ -472,11 +472,12 @@ function renderToday(today) {
     </div>
   </div>`;
 }
-const FOLDER_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" fill="currentColor" opacity=".15"/>
-  <path d="M4 12a4 4 0 0 1 4-4h9.5l4 5H40a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
-  <rect x="14.5" y="19" width="19" height="15" rx="2.5" fill="#fff" stroke="currentColor" stroke-width="2.6"/>
-  <text x="24" y="30" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="Arial, Helvetica, sans-serif">PDF</text>
+const PDF_SVG = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+  <path d="M11 4h17l12 12v25a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z" fill="#fff" stroke="#DC2626" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M28 4v9a3 3 0 0 0 3 3h9" stroke="#DC2626" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M28 4l12 12h-9a3 3 0 0 1-3-3V4Z" fill="#DC2626" opacity=".16"/>
+  <rect x="11" y="25" width="26" height="13" rx="2.6" fill="#DC2626"/>
+  <text x="24" y="34.4" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" font-family="Arial, Helvetica, sans-serif" letter-spacing=".3">PDF</text>
 </svg>`;
 
 function renderReport(r) {
@@ -484,7 +485,7 @@ function renderReport(r) {
       <div class="pg-report-week">${esc(r.week_start)} 那一周</div>
       ${r.summary ? `<div class="pg-report-sum">${esc(r.summary)}</div>` : ''}
       ${r.pdf ? `<a class="pg-report-file" href="/uploads/${esc(r.pdf)}" target="_blank" rel="noopener" title="${esc(r.title)}">
-        ${FOLDER_SVG}
+        ${PDF_SVG}
         <span class="t"><b>查看周报 PDF</b><small>点击打开完整周报</small></span>
         <span class="go">→</span>
       </a>` : ''}`
